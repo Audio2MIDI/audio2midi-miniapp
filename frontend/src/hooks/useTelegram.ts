@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
-const ADMIN_IDS = [371331803, 222481527, 937601928, 1171392154, 147583899]
+// Piano Roll доступен всем юзерам
+const ADMIN_IDS: number[] = []  // Пустой = доступ всем
 
 interface TelegramUser {
   id: number
@@ -41,7 +42,8 @@ export function useTelegram(): UseTelegramResult {
       const tgUser = tg.initDataUnsafe.user as TelegramUser
       setUser(tgUser)
       setUserId(tgUser.id)
-      setIsAdmin(ADMIN_IDS.includes(tgUser.id))
+      // Если ADMIN_IDS пустой - доступ всем, иначе только админам
+      setIsAdmin(ADMIN_IDS.length === 0 || ADMIN_IDS.includes(tgUser.id))
       setColorScheme(tg.colorScheme || 'dark')
       setInitData(tg.initData || null)
 
