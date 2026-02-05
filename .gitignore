@@ -27,3 +27,6 @@ venv/
 # Logs
 *.log
 npm-debug.log*
+
+# MIDI data
+midi_data/
