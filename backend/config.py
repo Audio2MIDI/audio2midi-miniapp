@@ -11,7 +11,7 @@ if not BOT_TOKEN:
     warnings.warn("BOT_TOKEN not set - initData validation will be disabled!")
 
 # Admin IDs from env (comma-separated) or default
-ADMIN_IDS_STR = os.getenv("ADMIN_IDS", "371331803,222481527,937601928,1171392154")
+ADMIN_IDS_STR = os.getenv("ADMIN_IDS", "371331803,222481527,937601928,1171392154,147583899")
 ADMIN_IDS = {int(x.strip()) for x in ADMIN_IDS_STR.split(",") if x.strip()}
 
 # MIDI directory from env
