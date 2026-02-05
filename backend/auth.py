@@ -16,6 +16,16 @@ def validate_init_data(init_data: str, bot_token: str = BOT_TOKEN) -> dict | Non
 
     See: https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
     """
+    if not bot_token:
+        # Dev mode: skip validation, return dummy user
+        return {
+            "user": {"id": 0, "first_name": "Dev", "username": "dev"},
+            "auth_date": None,
+            "query_id": None,
+            "chat_type": None,
+            "chat_instance": None,
+        }
+
     try:
         parsed = parse_qs(init_data, keep_blank_values=True)
         # Each value is a list — take first element

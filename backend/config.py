@@ -2,24 +2,27 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Load .env from Audio2MIDI project
-AUDIO2MIDI_ENV = Path("/home/jatana/Audio2MIDI/.env")
-if AUDIO2MIDI_ENV.exists():
-    load_dotenv(AUDIO2MIDI_ENV)
+# Load .env if exists (for local development)
+load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
-    raise RuntimeError("BOT_TOKEN not found. Set it in env or /home/jatana/Audio2MIDI/.env")
+    import warnings
+    warnings.warn("BOT_TOKEN not set - initData validation will be disabled!")
 
-ADMIN_IDS = {371331803}
+# Admin IDs from env (comma-separated) or default
+ADMIN_IDS_STR = os.getenv("ADMIN_IDS", "371331803")
+ADMIN_IDS = {int(x.strip()) for x in ADMIN_IDS_STR.split(",") if x.strip()}
 
-ACTION_LOG_PATH = "/home/jatana/Audio2MIDI/current_action_log.txt"
-MIDI_DIR = "/home/jatana/Audio2MIDI"  # adjust if MIDI files are elsewhere
+# MIDI directory from env
+MIDI_DIR = os.getenv("MIDI_DIR", "/data/midi")
 
 # CORS origins
 CORS_ORIGINS = [
     "http://localhost:3000",
+    "http://localhost:5173",
     "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
     "https://*.ngrok-free.app",
     "https://*.ngrok.io",
 ]
