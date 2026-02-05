@@ -10,6 +10,9 @@ const PIANO_KEY_WIDTH = 56
 const NOTE_HEIGHT_BASE = 14
 const PIXELS_PER_SEC_BASE = 120
 const API_BASE = '/api'  // Backend API base URL
+const ORIENTATION_STORAGE_KEY = 'pianoroll_orientation'
+
+type Orientation = 'horizontal' | 'vertical'
 
 function noteName(midi: number): string {
   return NOTE_NAMES[midi % 12] + (Math.floor(midi / 12) - 1)
@@ -24,6 +27,20 @@ function velocityColor(velocity: number): string {
   const hue = (1 - velocity) * 240 // 240 (blue) → 0 (red)
   const lightness = 40 + velocity * 20
   return `hsl(${hue}, 85%, ${lightness}%)`
+}
+
+function getStoredOrientation(): Orientation {
+  try {
+    const stored = localStorage.getItem(ORIENTATION_STORAGE_KEY)
+    if (stored === 'horizontal' || stored === 'vertical') return stored
+  } catch {}
+  return 'horizontal'
+}
+
+function setStoredOrientation(o: Orientation) {
+  try {
+    localStorage.setItem(ORIENTATION_STORAGE_KEY, o)
+  } catch {}
 }
 
 interface MidiNote {
@@ -57,6 +74,7 @@ const PianoRoll: React.FC<PianoRollProps> = ({ midiParam, userId, initData }) =>
   const [dragFile, setDragFile] = useState(false)
   const [duration, setDuration] = useState(0)
   const [fileName, setFileName] = useState('')
+  const [orientation, setOrientation] = useState<Orientation>(getStoredOrientation)
   
   // Auto-load states
   const [isAutoLoading, setIsAutoLoading] = useState(false)
@@ -71,7 +89,16 @@ const PianoRoll: React.FC<PianoRollProps> = ({ midiParam, userId, initData }) =>
 
   /* pitch range */
   const pitchRange = MAX_PITCH - MIN_PITCH + 1
-  const totalHeight = pitchRange * noteHeight
+  const totalPitchSize = pitchRange * noteHeight
+
+  /* ── toggle orientation ── */
+  const toggleOrientation = useCallback(() => {
+    setOrientation(prev => {
+      const next = prev === 'horizontal' ? 'vertical' : 'horizontal'
+      setStoredOrientation(next)
+      return next
+    })
+  }, [])
 
   /* ── load midi ── */
   const loadMidi = useCallback((buffer: ArrayBuffer, name: string) => {
@@ -97,16 +124,26 @@ const PianoRoll: React.FC<PianoRollProps> = ({ midiParam, userId, initData }) =>
       const maxTime = allNotes.reduce((m, n) => Math.max(m, n.time + n.duration), 0)
       setDuration(maxTime)
       setScrollX(0)
+      setScrollY(0)
 
-      // center vertically on the note range
+      // center on the note range
       if (allNotes.length > 0) {
         const minP = allNotes.reduce((m, n) => Math.min(m, n.pitch), 127)
         const maxP = allNotes.reduce((m, n) => Math.max(m, n.pitch), 0)
         const centerPitch = (minP + maxP) / 2
         const canvas = canvasRef.current
         if (canvas) {
-          const yCenter = (MAX_PITCH - centerPitch) * noteHeight - canvas.height / 2
-          setScrollY(Math.max(0, yCenter))
+          const canvasH = canvas.height / (window.devicePixelRatio || 1)
+          const canvasW = canvas.width / (window.devicePixelRatio || 1)
+          
+          if (orientation === 'horizontal') {
+            const yCenter = (MAX_PITCH - centerPitch) * noteHeight - canvasH / 2
+            setScrollY(Math.max(0, yCenter))
+          } else {
+            // Vertical mode: center horizontally on pitch range
+            const xCenter = (centerPitch - MIN_PITCH) * noteHeight - (canvasW - PIANO_KEY_WIDTH) / 2
+            setScrollX(Math.max(0, xCenter))
+          }
         }
       }
 
@@ -115,7 +152,7 @@ const PianoRoll: React.FC<PianoRollProps> = ({ midiParam, userId, initData }) =>
       console.error('Failed to parse MIDI:', e)
       alert('Не удалось прочитать MIDI файл')
     }
-  }, [noteHeight])
+  }, [noteHeight, orientation])
 
   /* ── file input ── */
   const handleFile = useCallback((file: File) => {
@@ -269,7 +306,6 @@ const PianoRoll: React.FC<PianoRollProps> = ({ midiParam, userId, initData }) =>
     if (!ctx) return
 
     const dpr = window.devicePixelRatio || 1
-    // Use CSS pixels for coordinates (ctx.scale(dpr) is applied in resize)
     const W = canvas.width / dpr
     const H = canvas.height / dpr
 
@@ -279,143 +315,294 @@ const PianoRoll: React.FC<PianoRollProps> = ({ midiParam, userId, initData }) =>
     const pps = pixelsPerSec
     const sx = scrollX
     const sy = scrollY
-
-    /* ── piano keys (left panel) ── */
     const keyW = PIANO_KEY_WIDTH
-    for (let p = MIN_PITCH; p <= MAX_PITCH; p++) {
-      const y = (MAX_PITCH - p) * nh - sy
-      if (y + nh < 0 || y > H) continue
 
-      const black = isBlackKey(p)
-      ctx.fillStyle = black ? '#1a1a28' : '#2a2a3e'
-      ctx.fillRect(0, y, keyW, nh)
-      ctx.strokeStyle = 'rgba(255,255,255,0.08)'
-      ctx.strokeRect(0, y, keyW, nh)
+    if (orientation === 'horizontal') {
+      /* ══════════════════════════════════════════════════════════════════
+         HORIZONTAL MODE: time left→right, pitch bottom→top
+         ══════════════════════════════════════════════════════════════════ */
+      
+      /* ── piano keys (left panel) ── */
+      for (let p = MIN_PITCH; p <= MAX_PITCH; p++) {
+        const y = (MAX_PITCH - p) * nh - sy
+        if (y + nh < 0 || y > H) continue
 
-      // Label
-      if (p % 12 === 0 || !black) {
-        ctx.fillStyle = black ? '#888' : '#bbb'
-        ctx.font = `${Math.max(9, nh * 0.65)}px monospace`
-        ctx.textBaseline = 'middle'
-        ctx.fillText(noteName(p), 4, y + nh / 2)
+        const black = isBlackKey(p)
+        ctx.fillStyle = black ? '#1a1a28' : '#2a2a3e'
+        ctx.fillRect(0, y, keyW, nh)
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)'
+        ctx.strokeRect(0, y, keyW, nh)
+
+        // Label
+        if (p % 12 === 0 || !black) {
+          ctx.fillStyle = black ? '#888' : '#bbb'
+          ctx.font = `${Math.max(9, nh * 0.65)}px monospace`
+          ctx.textBaseline = 'middle'
+          ctx.fillText(noteName(p), 4, y + nh / 2)
+        }
       }
-    }
 
-    /* ── grid area ── */
-    ctx.save()
-    ctx.beginPath()
-    ctx.rect(keyW, 0, W - keyW, H)
-    ctx.clip()
-
-    // horizontal lines per pitch
-    for (let p = MIN_PITCH; p <= MAX_PITCH; p++) {
-      const y = (MAX_PITCH - p) * nh - sy
-      if (y + nh < 0 || y > H) continue
-
-      const black = isBlackKey(p)
-      ctx.fillStyle = black ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.04)'
-      ctx.fillRect(keyW, y, W - keyW, nh)
-
-      ctx.strokeStyle = 'rgba(255,255,255,0.06)'
-      ctx.lineWidth = 0.5
+      /* ── grid area ── */
+      ctx.save()
       ctx.beginPath()
-      ctx.moveTo(keyW, y + nh)
-      ctx.lineTo(W, y + nh)
-      ctx.stroke()
-    }
+      ctx.rect(keyW, 0, W - keyW, H)
+      ctx.clip()
 
-    // vertical grid lines (every second and every beat)
-    const bpm = midi?.header?.tempos?.[0]?.bpm || 120
-    const beatSec = 60 / bpm
-    const barSec = beatSec * (midi?.header?.timeSignatures?.[0]?.timeSignature?.[0] || 4)
+      // horizontal lines per pitch
+      for (let p = MIN_PITCH; p <= MAX_PITCH; p++) {
+        const y = (MAX_PITCH - p) * nh - sy
+        if (y + nh < 0 || y > H) continue
 
-    const startSec = sx / pps
-    const endSec = (sx + W - keyW) / pps
+        const black = isBlackKey(p)
+        ctx.fillStyle = black ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.04)'
+        ctx.fillRect(keyW, y, W - keyW, nh)
 
-    // beat lines
-    const firstBeat = Math.floor(startSec / beatSec)
-    for (let i = firstBeat; i * beatSec <= endSec + beatSec; i++) {
-      const t = i * beatSec
-      const x = keyW + t * pps - sx
-      if (x < keyW) continue
-
-      const isBar = Math.abs(t % barSec) < 0.001 || Math.abs((t % barSec) - barSec) < 0.001
-      ctx.strokeStyle = isBar ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.06)'
-      ctx.lineWidth = isBar ? 1.5 : 0.5
-      ctx.beginPath()
-      ctx.moveTo(x, 0)
-      ctx.lineTo(x, H)
-      ctx.stroke()
-
-      // bar number
-      if (isBar) {
-        const barNum = Math.round(t / barSec) + 1
-        ctx.fillStyle = 'rgba(255,255,255,0.35)'
-        ctx.font = '11px monospace'
-        ctx.textBaseline = 'top'
-        ctx.fillText(`${barNum}`, x + 3, 4)
-      }
-    }
-
-    /* ── notes ── */
-    for (const n of notes) {
-      const x = keyW + n.time * pps - sx
-      const w = n.duration * pps
-      const y = (MAX_PITCH - n.pitch) * nh - sy
-
-      // culling
-      if (x + w < keyW || x > W || y + nh < 0 || y > H) continue
-
-      const clampX = Math.max(x, keyW)
-      const clampW = Math.min(x + w, W) - clampX
-
-      ctx.fillStyle = velocityColor(n.velocity)
-      ctx.beginPath()
-      const r = Math.min(3, nh / 3)
-      roundRect(ctx, clampX, y + 1, clampW, nh - 2, r)
-      ctx.fill()
-
-      // border
-      ctx.strokeStyle = 'rgba(0,0,0,0.3)'
-      ctx.lineWidth = 0.5
-      ctx.stroke()
-
-      // note name inside if wide enough
-      if (clampW > 28 && nh > 10) {
-        ctx.fillStyle = 'rgba(0,0,0,0.6)'
-        ctx.font = `${Math.min(10, nh - 4)}px monospace`
-        ctx.textBaseline = 'middle'
-        ctx.fillText(noteName(n.pitch), clampX + 3, y + nh / 2)
-      }
-    }
-
-    /* ── playhead ── */
-    if (isPlaying) {
-      const elapsed = Tone.now() - playStartTime
-      const px = keyW + elapsed * pps - sx
-      if (px >= keyW && px <= W) {
-        ctx.strokeStyle = '#fff'
-        ctx.lineWidth = 2
+        ctx.strokeStyle = 'rgba(255,255,255,0.06)'
+        ctx.lineWidth = 0.5
         ctx.beginPath()
-        ctx.moveTo(px, 0)
-        ctx.lineTo(px, H)
+        ctx.moveTo(keyW, y + nh)
+        ctx.lineTo(W, y + nh)
+        ctx.stroke()
+      }
+
+      // vertical grid lines (every beat)
+      const bpm = midi?.header?.tempos?.[0]?.bpm || 120
+      const beatSec = 60 / bpm
+      const barSec = beatSec * (midi?.header?.timeSignatures?.[0]?.timeSignature?.[0] || 4)
+
+      const startSec = sx / pps
+      const endSec = (sx + W - keyW) / pps
+
+      const firstBeat = Math.floor(startSec / beatSec)
+      for (let i = firstBeat; i * beatSec <= endSec + beatSec; i++) {
+        const t = i * beatSec
+        const x = keyW + t * pps - sx
+        if (x < keyW) continue
+
+        const isBar = Math.abs(t % barSec) < 0.001 || Math.abs((t % barSec) - barSec) < 0.001
+        ctx.strokeStyle = isBar ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.06)'
+        ctx.lineWidth = isBar ? 1.5 : 0.5
+        ctx.beginPath()
+        ctx.moveTo(x, 0)
+        ctx.lineTo(x, H)
         ctx.stroke()
 
-        ctx.fillStyle = '#fff'
-        ctx.beginPath()
-        ctx.moveTo(px - 5, 0)
-        ctx.lineTo(px + 5, 0)
-        ctx.lineTo(px, 8)
-        ctx.fill()
+        if (isBar) {
+          const barNum = Math.round(t / barSec) + 1
+          ctx.fillStyle = 'rgba(255,255,255,0.35)'
+          ctx.font = '11px monospace'
+          ctx.textBaseline = 'top'
+          ctx.fillText(`${barNum}`, x + 3, 4)
+        }
       }
-    }
 
-    ctx.restore()
+      /* ── notes ── */
+      for (const n of notes) {
+        const x = keyW + n.time * pps - sx
+        const w = n.duration * pps
+        const y = (MAX_PITCH - n.pitch) * nh - sy
+
+        if (x + w < keyW || x > W || y + nh < 0 || y > H) continue
+
+        const clampX = Math.max(x, keyW)
+        const clampW = Math.min(x + w, W) - clampX
+
+        ctx.fillStyle = velocityColor(n.velocity)
+        ctx.beginPath()
+        const r = Math.min(3, nh / 3)
+        roundRect(ctx, clampX, y + 1, clampW, nh - 2, r)
+        ctx.fill()
+
+        ctx.strokeStyle = 'rgba(0,0,0,0.3)'
+        ctx.lineWidth = 0.5
+        ctx.stroke()
+
+        if (clampW > 28 && nh > 10) {
+          ctx.fillStyle = 'rgba(0,0,0,0.6)'
+          ctx.font = `${Math.min(10, nh - 4)}px monospace`
+          ctx.textBaseline = 'middle'
+          ctx.fillText(noteName(n.pitch), clampX + 3, y + nh / 2)
+        }
+      }
+
+      /* ── playhead (vertical line) ── */
+      if (isPlaying) {
+        const elapsed = Tone.now() - playStartTime
+        const px = keyW + elapsed * pps - sx
+        if (px >= keyW && px <= W) {
+          ctx.strokeStyle = '#fff'
+          ctx.lineWidth = 2
+          ctx.beginPath()
+          ctx.moveTo(px, 0)
+          ctx.lineTo(px, H)
+          ctx.stroke()
+
+          ctx.fillStyle = '#fff'
+          ctx.beginPath()
+          ctx.moveTo(px - 5, 0)
+          ctx.lineTo(px + 5, 0)
+          ctx.lineTo(px, 8)
+          ctx.fill()
+        }
+      }
+
+      ctx.restore()
+
+    } else {
+      /* ══════════════════════════════════════════════════════════════════
+         VERTICAL MODE: time top→bottom, pitch left→right (Guitar Hero style)
+         Piano keys at bottom, notes fall from top
+         ══════════════════════════════════════════════════════════════════ */
+      
+      const keyH = PIANO_KEY_WIDTH  // Height of piano keys bar at bottom
+      const gridH = H - keyH        // Grid area height
+
+      /* ── piano keys (bottom panel) ── */
+      for (let p = MIN_PITCH; p <= MAX_PITCH; p++) {
+        const x = (p - MIN_PITCH) * nh - sx
+        if (x + nh < 0 || x > W) continue
+
+        const black = isBlackKey(p)
+        ctx.fillStyle = black ? '#1a1a28' : '#2a2a3e'
+        ctx.fillRect(x, gridH, nh, keyH)
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)'
+        ctx.strokeRect(x, gridH, nh, keyH)
+
+        // Label (rotated or simplified)
+        if ((p % 12 === 0 || !black) && nh > 12) {
+          ctx.fillStyle = black ? '#888' : '#bbb'
+          ctx.font = `${Math.max(8, Math.min(10, nh * 0.6))}px monospace`
+          ctx.textBaseline = 'top'
+          ctx.textAlign = 'center'
+          ctx.fillText(noteName(p), x + nh / 2, gridH + 4)
+        }
+      }
+      ctx.textAlign = 'left'
+
+      /* ── grid area ── */
+      ctx.save()
+      ctx.beginPath()
+      ctx.rect(0, 0, W, gridH)
+      ctx.clip()
+
+      // vertical lines per pitch
+      for (let p = MIN_PITCH; p <= MAX_PITCH; p++) {
+        const x = (p - MIN_PITCH) * nh - sx
+        if (x + nh < 0 || x > W) continue
+
+        const black = isBlackKey(p)
+        ctx.fillStyle = black ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.04)'
+        ctx.fillRect(x, 0, nh, gridH)
+
+        ctx.strokeStyle = 'rgba(255,255,255,0.06)'
+        ctx.lineWidth = 0.5
+        ctx.beginPath()
+        ctx.moveTo(x + nh, 0)
+        ctx.lineTo(x + nh, gridH)
+        ctx.stroke()
+      }
+
+      // horizontal grid lines (every beat) - time flows top to bottom
+      const bpm = midi?.header?.tempos?.[0]?.bpm || 120
+      const beatSec = 60 / bpm
+      const barSec = beatSec * (midi?.header?.timeSignatures?.[0]?.timeSignature?.[0] || 4)
+
+      const startSec = sy / pps
+      const endSec = (sy + gridH) / pps
+
+      const firstBeat = Math.floor(startSec / beatSec)
+      for (let i = firstBeat; i * beatSec <= endSec + beatSec; i++) {
+        const t = i * beatSec
+        const y = t * pps - sy
+        if (y < 0 || y > gridH) continue
+
+        const isBar = Math.abs(t % barSec) < 0.001 || Math.abs((t % barSec) - barSec) < 0.001
+        ctx.strokeStyle = isBar ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.06)'
+        ctx.lineWidth = isBar ? 1.5 : 0.5
+        ctx.beginPath()
+        ctx.moveTo(0, y)
+        ctx.lineTo(W, y)
+        ctx.stroke()
+
+        if (isBar) {
+          const barNum = Math.round(t / barSec) + 1
+          ctx.fillStyle = 'rgba(255,255,255,0.35)'
+          ctx.font = '11px monospace'
+          ctx.textBaseline = 'top'
+          ctx.fillText(`${barNum}`, 4, y + 3)
+        }
+      }
+
+      /* ── notes ── */
+      for (const n of notes) {
+        const x = (n.pitch - MIN_PITCH) * nh - sx
+        const y = n.time * pps - sy
+        const h = n.duration * pps
+
+        if (x + nh < 0 || x > W || y + h < 0 || y > gridH) continue
+
+        const clampY = Math.max(y, 0)
+        const clampH = Math.min(y + h, gridH) - clampY
+
+        ctx.fillStyle = velocityColor(n.velocity)
+        ctx.beginPath()
+        const r = Math.min(3, nh / 3)
+        roundRect(ctx, x + 1, clampY, nh - 2, clampH, r)
+        ctx.fill()
+
+        ctx.strokeStyle = 'rgba(0,0,0,0.3)'
+        ctx.lineWidth = 0.5
+        ctx.stroke()
+
+        if (clampH > 28 && nh > 10) {
+          ctx.save()
+          ctx.translate(x + nh / 2, clampY + 14)
+          ctx.rotate(-Math.PI / 2)
+          ctx.fillStyle = 'rgba(0,0,0,0.6)'
+          ctx.font = `${Math.min(10, nh - 4)}px monospace`
+          ctx.textBaseline = 'middle'
+          ctx.textAlign = 'center'
+          ctx.fillText(noteName(n.pitch), 0, 0)
+          ctx.restore()
+        }
+      }
+
+      /* ── playhead (horizontal line moving top→bottom) ── */
+      if (isPlaying) {
+        const elapsed = Tone.now() - playStartTime
+        const py = elapsed * pps - sy
+        if (py >= 0 && py <= gridH) {
+          ctx.strokeStyle = '#fff'
+          ctx.lineWidth = 2
+          ctx.beginPath()
+          ctx.moveTo(0, py)
+          ctx.lineTo(W, py)
+          ctx.stroke()
+
+          ctx.fillStyle = '#fff'
+          ctx.beginPath()
+          ctx.moveTo(0, py - 5)
+          ctx.lineTo(0, py + 5)
+          ctx.lineTo(8, py)
+          ctx.fill()
+        }
+      }
+
+      ctx.restore()
+
+      // Draw separator line between grid and piano keys
+      ctx.strokeStyle = 'rgba(255,255,255,0.2)'
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      ctx.moveTo(0, gridH)
+      ctx.lineTo(W, gridH)
+      ctx.stroke()
+    }
 
     if (isPlaying) {
       animFrameRef.current = requestAnimationFrame(draw)
     }
-  }, [notes, midi, zoom, scrollX, scrollY, noteHeight, pixelsPerSec, isPlaying, playStartTime])
+  }, [notes, midi, zoom, scrollX, scrollY, noteHeight, pixelsPerSec, isPlaying, playStartTime, orientation])
 
   /* ── resize ── */
   useEffect(() => {
@@ -454,22 +641,32 @@ const PianoRoll: React.FC<PianoRollProps> = ({ midiParam, userId, initData }) =>
 
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault()
+      const dpr = window.devicePixelRatio || 1
+      
       if (e.ctrlKey || e.metaKey) {
         // zoom
         const delta = e.deltaY > 0 ? 0.9 : 1.1
         setZoom(z => Math.max(0.3, Math.min(5, z * delta)))
-      } else {
+      } else if (orientation === 'horizontal') {
+        // Horizontal mode: deltaX = time scroll, deltaY = pitch scroll
         setScrollX(sx => Math.max(0, sx + e.deltaX + (e.shiftKey ? e.deltaY : 0)))
         setScrollY(sy => {
-          const maxSy = Math.max(0, totalHeight - canvas.height / (window.devicePixelRatio || 1))
+          const maxSy = Math.max(0, totalPitchSize - canvas.height / dpr)
           return Math.max(0, Math.min(maxSy, sy + (e.shiftKey ? 0 : e.deltaY)))
+        })
+      } else {
+        // Vertical mode: deltaY = time scroll (top→bottom), deltaX = pitch scroll
+        setScrollY(sy => Math.max(0, sy + e.deltaY + (e.shiftKey ? e.deltaX : 0)))
+        setScrollX(sx => {
+          const maxSx = Math.max(0, totalPitchSize - canvas.width / dpr)
+          return Math.max(0, Math.min(maxSx, sx + (e.shiftKey ? 0 : e.deltaX)))
         })
       }
     }
 
     canvas.addEventListener('wheel', handleWheel, { passive: false })
     return () => canvas.removeEventListener('wheel', handleWheel)
-  }, [totalHeight])
+  }, [totalPitchSize, orientation])
 
   /* ── touch support with pinch-to-zoom ── */
   useEffect(() => {
@@ -497,6 +694,7 @@ const PianoRoll: React.FC<PianoRollProps> = ({ midiParam, userId, initData }) =>
 
     const onTouchMove = (e: TouchEvent) => {
       e.preventDefault()
+      const dpr = window.devicePixelRatio || 1
       
       // Single touch: pan
       if (e.touches.length === 1) {
@@ -504,11 +702,22 @@ const PianoRoll: React.FC<PianoRollProps> = ({ midiParam, userId, initData }) =>
         const dy = lastTouchY - e.touches[0].clientY
         lastTouchX = e.touches[0].clientX
         lastTouchY = e.touches[0].clientY
-        setScrollX(sx => Math.max(0, sx + dx))
-        setScrollY(sy => {
-          const maxSy = Math.max(0, totalHeight - canvas.height / (window.devicePixelRatio || 1))
-          return Math.max(0, Math.min(maxSy, sy + dy))
-        })
+        
+        if (orientation === 'horizontal') {
+          // Horizontal: dx = time, dy = pitch
+          setScrollX(sx => Math.max(0, sx + dx))
+          setScrollY(sy => {
+            const maxSy = Math.max(0, totalPitchSize - canvas.height / dpr)
+            return Math.max(0, Math.min(maxSy, sy + dy))
+          })
+        } else {
+          // Vertical: dy = time, dx = pitch
+          setScrollY(sy => Math.max(0, sy + dy))
+          setScrollX(sx => {
+            const maxSx = Math.max(0, totalPitchSize - canvas.width / dpr)
+            return Math.max(0, Math.min(maxSx, sx + dx))
+          })
+        }
       }
       
       // Two fingers: pinch-to-zoom
@@ -534,7 +743,7 @@ const PianoRoll: React.FC<PianoRollProps> = ({ midiParam, userId, initData }) =>
       canvas.removeEventListener('touchmove', onTouchMove)
       canvas.removeEventListener('touchend', onTouchEnd)
     }
-  }, [totalHeight])
+  }, [totalPitchSize, orientation])
 
   /* ── drop zone ── */
   const onDragOver = (e: React.DragEvent) => {
@@ -607,6 +816,24 @@ const PianoRoll: React.FC<PianoRollProps> = ({ midiParam, userId, initData }) =>
         <span style={{ fontSize: 12, color: 'var(--text-secondary)', marginLeft: 4 }}>
           {Math.round(zoom * 100)}%
         </span>
+
+        <div style={{ width: 1, height: 24, background: 'rgba(255,255,255,0.1)' }} />
+
+        {/* Orientation toggle button */}
+        <button
+          onClick={toggleOrientation}
+          title={orientation === 'horizontal' ? 'Вертикальный режим (Guitar Hero)' : 'Горизонтальный режим'}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+          }}
+        >
+          {orientation === 'horizontal' ? '↕️' : '↔️'}
+          <span style={{ fontSize: 11 }}>
+            {orientation === 'horizontal' ? 'Верт.' : 'Гориз.'}
+          </span>
+        </button>
 
         {fileName && (
           <span
