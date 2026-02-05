@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-const ADMIN_IDS = [371331803]
+const ADMIN_IDS = [371331803, 222481527, 937601928, 1171392154]
 
 interface TelegramUser {
   id: number
