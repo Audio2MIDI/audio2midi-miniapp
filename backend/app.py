@@ -2,9 +2,10 @@
 
 import re
 import base64
+import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Header, Query
+from fastapi import FastAPI, HTTPException, Header, Query, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
@@ -186,6 +187,45 @@ async def download_midi_file(midi_id: str):
             )
 
     raise HTTPException(status_code=404, detail="MIDI file not found")
+
+
+@app.post("/api/upload-midi")
+async def upload_midi(
+    file: UploadFile = File(...),
+    user_id: str = Form(None),
+):
+    """
+    Upload MIDI file from bot.
+    Returns midi_id that can be used in Mini App URL.
+    """
+    # Validate file
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided")
+    
+    # Generate unique midi_id
+    original_name = Path(file.filename).stem
+    midi_id = f"{original_name}_{uuid.uuid4().hex[:8]}"
+    
+    # Ensure directory exists
+    MIDI_PATH.mkdir(parents=True, exist_ok=True)
+    
+    # Save file
+    file_path = MIDI_PATH / f"{midi_id}.mid"
+    content = await file.read()
+    
+    # Basic validation - MIDI files start with "MThd"
+    if not content.startswith(b'MThd'):
+        raise HTTPException(status_code=400, detail="Invalid MIDI file")
+    
+    file_path.write_bytes(content)
+    
+    return {
+        "ok": True,
+        "midi_id": midi_id,
+        "filename": f"{midi_id}.mid",
+        "size": len(content),
+        "user_id": user_id,
+    }
 
 
 @app.get("/api/list")
