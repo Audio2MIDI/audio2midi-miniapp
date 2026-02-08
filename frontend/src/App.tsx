@@ -2,7 +2,7 @@ import { useTelegram } from './hooks/useTelegram'
 import PianoRoll from './components/PianoRoll'
 
 function App() {
-  const { isAdmin, isLoading, userId, colorScheme, isDev, initData, midiParam } = useTelegram()
+  const { isAdmin, isLoading, userId, colorScheme, isDev, initData, midiParam, fileUrl } = useTelegram()
 
   if (isLoading) {
     return (
@@ -58,7 +58,7 @@ function App() {
           🛠 DEV MODE — open with ?dev=1{midiParam && ` | MIDI: ${midiParam}`}
         </div>
       )}
-      <PianoRoll midiParam={midiParam} userId={userId} initData={initData} />
+      <PianoRoll midiParam={midiParam} fileUrl={fileUrl} userId={userId} initData={initData} />
     </div>
   )
 }

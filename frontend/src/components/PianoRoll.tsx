@@ -1,6 +1,8 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react'
 import { Midi } from '@tonejs/midi'
 import * as Tone from 'tone'
+import { fetchLatestMidi } from '../api/midi'
+import { ApiError } from '../api/client'
 
 /* ── constants ── */
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
@@ -9,7 +11,6 @@ const MAX_PITCH = 108  // C8
 const PIANO_KEY_WIDTH = 56
 const NOTE_HEIGHT_BASE = 14
 const PIXELS_PER_SEC_BASE = 120
-const API_BASE = '/api'  // Backend API base URL
 const ORIENTATION_STORAGE_KEY = 'pianoroll_orientation'
 
 type Orientation = 'horizontal' | 'vertical'
@@ -52,13 +53,14 @@ interface MidiNote {
 }
 
 interface PianoRollProps {
-  midiParam?: string | null  // MIDI ID to auto-load
+  midiParam?: string | null  // MIDI ID to auto-load from backend API
+  fileUrl?: string | null    // Direct MIDI URL (e.g. S3) to fetch
   userId?: number | null     // User ID to load latest MIDI
   initData?: string | null   // Telegram initData for auth
 }
 
 /* ── component ── */
-const PianoRoll: React.FC<PianoRollProps> = ({ midiParam, userId, initData }) => {
+const PianoRoll: React.FC<PianoRollProps> = ({ midiParam, fileUrl, userId, initData }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const animFrameRef = useRef<number>(0)
@@ -169,57 +171,48 @@ const PianoRoll: React.FC<PianoRollProps> = ({ midiParam, userId, initData }) =>
     reader.readAsArrayBuffer(file)
   }, [loadMidi])
 
-  /* ── auto-load MIDI from API ── */
+  /* ── auto-load MIDI from API or direct URL ── */
   useEffect(() => {
-    // Need either midiParam or userId to auto-load
-    if (!midiParam && !userId) return
+    // Need midiParam, fileUrl, or userId to auto-load
+    if (!midiParam && !fileUrl && !userId) return
     
-    const loadFromApi = async () => {
+    const loadFromSource = async () => {
       setIsAutoLoading(true)
       setAutoLoadError(null)
       
       try {
-        const headers: Record<string, string> = {}
-        if (initData) {
-          headers['Authorization'] = `tma ${initData}`
+        if (fileUrl) {
+          // Direct URL mode (S3 link via ?file= param)
+          const response = await fetch(fileUrl)
+          if (!response.ok) {
+            throw new Error(`Failed to fetch MIDI: HTTP ${response.status}`)
+          }
+          const buffer = await response.arrayBuffer()
+          const urlFilename = fileUrl.split('/').pop()?.split('?')[0] || 'file.mid'
+          loadMidi(buffer, decodeURIComponent(urlFilename))
+        } else if (midiParam) {
+          // Backend API mode (midi_id via ?midi= param)
+          const data = await fetchLatestMidi(midiParam)
+          
+          if (!data.ok || !data.data) {
+            throw new Error(data.error || 'No MIDI data received')
+          }
+          
+          // Decode base64 MIDI data
+          const binaryString = atob(data.data)
+          const bytes = new Uint8Array(binaryString.length)
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i)
+          }
+          
+          loadMidi(bytes.buffer, data.filename || `${midiParam}.mid`)
         }
-        
-        // Build query: prioritize midi_id, fallback to user_id for latest
-        const queryParam = midiParam 
-          ? `midi_id=${encodeURIComponent(midiParam)}`
-          : `user_id=${userId}`
-        
-        const response = await fetch(
-          `${API_BASE}/latest-midi?${queryParam}`,
-          { headers }
-        )
-        
-        if (response.status === 404) {
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) {
           // No MIDI found — not an error, just show empty state
           console.log('No MIDI found for', midiParam || userId)
           return
         }
-        
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}))
-          throw new Error(errData.error || `HTTP ${response.status}`)
-        }
-        
-        const data = await response.json()
-        
-        if (!data.ok || !data.data) {
-          throw new Error(data.error || 'No MIDI data received')
-        }
-        
-        // Decode base64 MIDI data
-        const binaryString = atob(data.data)
-        const bytes = new Uint8Array(binaryString.length)
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i)
-        }
-        
-        loadMidi(bytes.buffer, data.filename || `${midiParam || 'latest'}.mid`)
-      } catch (err) {
         console.error('Auto-load MIDI failed:', err)
         setAutoLoadError(err instanceof Error ? err.message : 'Failed to load MIDI')
       } finally {
@@ -227,8 +220,8 @@ const PianoRoll: React.FC<PianoRollProps> = ({ midiParam, userId, initData }) =>
       }
     }
     
-    loadFromApi()
-  }, [midiParam, userId, initData, loadMidi])
+    loadFromSource()
+  }, [midiParam, fileUrl, userId, initData, loadMidi])
 
   /* ── playback ── */
   const startPlayback = useCallback(async () => {

@@ -19,6 +19,7 @@ interface UseTelegramResult {
   isDev: boolean
   initData: string | null
   midiParam: string | null  // MIDI ID from start_param or URL
+  fileUrl: string | null    // Direct MIDI file URL (e.g. S3)
 }
 
 export function useTelegram(): UseTelegramResult {
@@ -30,10 +31,17 @@ export function useTelegram(): UseTelegramResult {
   const [isDev, setIsDev] = useState(false)
   const [initData, setInitData] = useState<string | null>(null)
   const [midiParam, setMidiParam] = useState<string | null>(null)
+  const [fileUrl, setFileUrl] = useState<string | null>(null)
 
   useEffect(() => {
     const tg = (window as any).Telegram?.WebApp
     const params = new URLSearchParams(window.location.search)
+
+    // Check for direct file URL (S3 link via ?file= param, used by visualizer)
+    const urlFile = params.get('file')
+    if (urlFile) {
+      setFileUrl(urlFile)
+    }
 
     // Check for MIDI param in URL (for dev/testing)
     const urlMidi = params.get('midi')
@@ -62,8 +70,9 @@ export function useTelegram(): UseTelegramResult {
       tg.ready()
       tg.expand()
     } else {
-      // Dev mode — no Telegram context
+      // No Telegram context
       if (params.get('dev') === '1') {
+        // Dev mode
         setIsDev(true)
         setIsAdmin(true)
         setUser({ id: 0, first_name: 'Dev' })
@@ -71,11 +80,15 @@ export function useTelegram(): UseTelegramResult {
         if (urlMidi) {
           setMidiParam(urlMidi)
         }
+      } else if (urlFile || window.location.pathname === '/visualizer') {
+        // Visualizer mode — public access via direct URL
+        setIsAdmin(true)
+        setUser({ id: 0, first_name: 'Viewer' })
       }
     }
 
     setIsLoading(false)
   }, [])
 
-  return { isAdmin, isLoading, user, userId, colorScheme, isDev, initData, midiParam }
+  return { isAdmin, isLoading, user, userId, colorScheme, isDev, initData, midiParam, fileUrl }
 }

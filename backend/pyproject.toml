@@ -1,0 +1,10 @@
+[project]
+name = "audio2midi-miniapp-backend"
+version = "1.0.0"
+description = "Audio2MIDI Mini App — Backend API"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "python-dotenv>=1.0.0",
+]
