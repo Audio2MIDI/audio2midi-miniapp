@@ -1,17 +1,13 @@
 FROM python:3.11-slim
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
-
 WORKDIR /app
 
-# Copy dependency files first for better caching
-COPY backend/pyproject.toml backend/uv.lock ./
-
-# Install dependencies
-RUN uv sync --frozen --no-dev
+# Install dependencies with pip (simple, reliable)
+COPY backend/pyproject.toml ./
+RUN pip install --no-cache-dir fastapi "uvicorn[standard]" python-dotenv python-multipart
 
 # Copy application code
 COPY backend/app.py backend/auth.py backend/config.py ./
 
 EXPOSE 8001
-CMD ["uv", "run", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8001"]
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8001"]
