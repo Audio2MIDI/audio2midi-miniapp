@@ -1,67 +1,107 @@
 # Audio2MIDI Mini App
 
-Piano Roll visualization for Telegram Mini App.
+Piano Roll визуализатор MIDI файлов для Telegram Mini App.  
+Работает целиком в браузере — парсит MIDI и рисует ноты на Canvas с воспроизведением через Grand Piano (Salamander samples).
 
-## Quick Start
+## Quick Start (Docker)
 
 ```bash
-# 1. Configure environment
+# 1. Настроить окружение
 cp .env.example .env
-# Edit .env and set your BOT_TOKEN
+# Отредактировать .env — указать BOT_TOKEN
 
-# 2. Build and run
+# 2. Собрать и запустить
 docker compose up -d --build
 
-# 3. Check status
+# 3. Проверить статус
 docker compose ps
 ```
 
-App will be available on port 80.
+Приложение будет доступно на порту 80.
 
-## Configuration
+## Quick Start (Dev)
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `BOT_TOKEN` | Telegram bot token (for initData validation) | required |
-| `ADMIN_IDS` | Comma-separated admin user IDs | `371331803` |
-| `MIDI_DIR` | Directory for MIDI files | `/data/midi` |
+```bash
+# Backend
+cd backend
+uv sync
+uv run uvicorn app:app --host 0.0.0.0 --port 3001 --reload
 
-## Architecture
+# Frontend (в другом терминале)
+cd frontend
+npm install
+npm run dev  # http://localhost:3000
+```
+
+Vite проксирует `/api/*` на backend (:3001).
+
+### Тестирование в браузере
+
+```
+# Dev mode (без Telegram)
+http://localhost:3000/?dev=1
+
+# С конкретным MIDI из бэкенда
+http://localhost:3000/?dev=1&midi=test_id
+
+# С прямой ссылкой на MIDI файл (S3, URL)
+http://localhost:3000/?file=https://s3.example.com/song.mid
+```
+
+## Конфигурация
+
+| Переменная | Описание | По умолчанию |
+|------------|----------|--------------|
+| `BOT_TOKEN` | Telegram bot token (для валидации initData) | обязательно |
+| `ADMIN_IDS` | ID админов через запятую | `371331803` |
+| `MIDI_DIR` | Директория для MIDI файлов | `/data/midi` |
+
+## Архитектура
 
 ```
 ┌─────────────────────┐      POST /api/upload-midi      ┌─────────────────────┐
-│    Audio2MIDI Bot   │ ────────────────────────────────│    Mini App Server  │
-│   (Your Server)     │        (MIDI file)              │   (Misha's Server)  │
+│    Audio2MIDI Bot    │ ───────────────────────────────▶│   Mini App Server   │
+│   (наш сервер)      │        (MIDI файл)              │  (сервер Миши)      │
 └─────────────────────┘                                 └─────────────────────┘
          │                                                        │
          │                                                        │
          ▼                                                        ▼
 ┌─────────────────────┐                                 ┌─────────────────────┐
-│  User in Telegram   │ ──── Opens Mini App URL ─────── │   Piano Roll UI     │
+│  Юзер в Telegram    │ ──── Открывает Mini App ──────▶ │   Piano Roll UI     │
 └─────────────────────┘                                 └─────────────────────┘
 ```
 
-### Bot → Mini App Flow
+### Как работает
 
-1. User sends song to bot
-2. Bot converts to MIDI
-3. Bot uploads MIDI via `POST /api/upload-midi` → gets `midi_id`
-4. Bot sends button with URL: `https://app.audio2midi.ru/?midi={midi_id}`
-5. User opens Mini App → Piano Roll loads MIDI automatically
+1. Юзер отправляет песню боту
+2. Бот конвертирует в MIDI
+3. Бот загружает MIDI через `POST /api/upload-midi` → получает `midi_id`
+4. Бот отправляет кнопку с URL: `https://app.audio2midi.ru/?midi={midi_id}`
+5. Юзер открывает Mini App → Piano Roll загружает MIDI автоматически
 
-### Bot Integration
+### Альтернативный режим: прямая ссылка
 
-In your bot, set `MINIAPP_URL` environment variable:
+Визуализатор может загружать MIDI по прямому URL (например, из S3):
+
+```
+https://app.audio2midi.ru/?file=https://s3.rapid-vision.ru/a2m/song.mid
+```
+
+MIDI загружается и парсится прямо в браузере. Серверный бэкенд для этого не нужен.
+
+### Интеграция с ботом
+
+В боте указать `MINIAPP_URL`:
 
 ```bash
-# Development (tunnel)
+# Для разработки (tunnel)
 MINIAPP_URL=https://your-tunnel.pinggy.link
 
-# Production
+# Продакшн
 MINIAPP_URL=https://app.audio2midi.ru
 ```
 
-Bot code uploads MIDI:
+Код бота для загрузки MIDI:
 ```python
 async with httpx.AsyncClient() as client:
     response = await client.post(
@@ -72,17 +112,17 @@ async with httpx.AsyncClient() as client:
     midi_id = response.json()["midi_id"]
 ```
 
-## API Endpoints
+## API
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
+| Endpoint | Метод | Описание |
+|----------|-------|----------|
 | `/api/health` | GET | Health check |
-| `/api/upload-midi` | POST | Upload MIDI from bot (multipart/form-data) |
-| `/api/latest-midi?midi_id=X` | GET | Get MIDI as base64 for frontend |
-| `/api/midi/{filename}` | GET | Download MIDI file |
-| `/api/midi-file/{midi_id}` | GET | Download MIDI by ID |
-| `/api/auth` | POST | Validate Telegram initData |
-| `/api/list` | GET | List MIDI files (admin only) |
+| `/api/upload-midi` | POST | Загрузить MIDI из бота (multipart/form-data) |
+| `/api/latest-midi?midi_id=X` | GET | Получить MIDI как base64 для фронтенда |
+| `/api/midi/{filename}` | GET | Скачать MIDI файл по имени |
+| `/api/midi-file/{midi_id}` | GET | Скачать MIDI по ID |
+| `/api/auth` | POST | Валидация Telegram initData |
+| `/api/list` | GET | Список MIDI файлов (только админ) |
 
 ### Upload MIDI
 
@@ -92,7 +132,7 @@ curl -X POST https://app.audio2midi.ru/api/upload-midi \
   -F "user_id=123456789"
 ```
 
-Response:
+Ответ:
 ```json
 {
   "ok": true,
@@ -102,56 +142,85 @@ Response:
 }
 ```
 
-## Frontend
+## Функции Piano Roll
 
-- React + TypeScript + Vite
-- Canvas-based Piano Roll
-- Tone.js for MIDI playback
-- Touch support (pinch-to-zoom, scroll)
-- Telegram theme integration (dark/light)
+- 🎹 Canvas-based визуализация нот
+- 🎵 Воспроизведение Grand Piano (Salamander samples)
+- 🔄 Два режима: горизонтальный (классический) и вертикальный (Guitar Hero)
+- 📱 Touch support: pinch-to-zoom, свайп для скролла
+- 🎨 Цвета нот по velocity (от синего к красному)
+- 🌙 Поддержка тем Telegram (dark/light)
+- 📂 Drag & drop для MIDI файлов
+- 🔗 Загрузка по URL (`?file=`) или из бэкенда (`?midi=`)
 
-## Production Deployment
+## Стек
 
-### With Traefik (recommended)
+- **Frontend:** React 19 + TypeScript + Vite
+- **Визуализация:** Canvas API
+- **Звук:** Tone.js + @tonejs/midi
+- **Backend:** FastAPI + Python 3.11 + uv
+- **Инфра:** Docker + nginx
+- **Telegram:** WebApp SDK
 
-Add labels to frontend service in `docker-compose.yaml`:
+## Структура проекта
 
-```yaml
-frontend:
-  labels:
-    - "traefik.enable=true"
-    - "traefik.http.routers.miniapp.rule=Host(`app.audio2midi.ru`)"
-    - "traefik.http.routers.miniapp.tls.certresolver=letsencrypt"
+```
+audio2midi-miniapp/
+├── frontend/                  # React + TypeScript + Vite
+│   ├── src/
+│   │   ├── App.tsx            # Главный компонент (auth gate + layout)
+│   │   ├── main.tsx           # Entry point
+│   │   ├── components/
+│   │   │   └── PianoRoll.tsx  # Визуализатор (Canvas + Tone.js)
+│   │   ├── api/
+│   │   │   ├── client.ts     # Typed API client (fetch wrapper)
+│   │   │   ├── midi.ts       # MIDI API functions
+│   │   │   └── types.ts      # TypeScript типы ответов
+│   │   ├── hooks/
+│   │   │   └── useTelegram.ts # Telegram WebApp SDK integration
+│   │   └── styles/
+│   │       └── global.css     # Темы, кнопки, анимации
+│   ├── index.html             # HTML шаблон (Telegram SDK скрипт)
+│   ├── package.json
+│   ├── vite.config.ts         # Dev server + proxy /api → :3001
+│   ├── tsconfig.json
+│   └── eslint.config.js
+├── backend/                   # FastAPI
+│   ├── app.py                 # Endpoints (upload, latest-midi, auth, list)
+│   ├── auth.py                # HMAC-SHA256 валидация initData
+│   ├── config.py              # Конфигурация (env vars)
+│   ├── pyproject.toml         # Python зависимости (uv)
+│   └── uv.lock
+├── docker-compose.yaml        # Docker деплой (frontend + backend)
+├── Dockerfile.frontend        # Multi-stage: npm build → nginx
+├── Dockerfile.backend         # Python + uv
+├── nginx.conf                 # Proxy /api → backend
+├── .env.example               # Шаблон переменных окружения
+├── DEPLOY.md                  # Инструкции по деплою
+└── REVIEW.md                  # Code review заметки
 ```
 
-### Manual SSL with nginx
+## Деплой
 
-1. Add DNS A record pointing to your server
-2. Install certbot: `apt install certbot python3-certbot-nginx`
-3. Get certificate: `certbot --nginx -d app.audio2midi.ru`
+См. [DEPLOY.md](DEPLOY.md) — инструкции по деплою на сервер.
 
-## Development
+### Кратко
 
-### Frontend only
+Для статичного деплоя (без бэкенда, только визуализатор по `?file=` URL):
 ```bash
-cd frontend
-npm install
-npm run dev  # http://localhost:3000
+cd frontend && npm install && npm run build
+# Скопировать dist/* на веб-сервер с HTTPS
 ```
 
-### Backend only
+Для полного деплоя (с бэкендом для upload/list):
 ```bash
-cd backend
-pip install -r requirements.txt
-uvicorn app:app --reload --port 3001
+docker compose up -d --build
 ```
 
-### Testing in browser
-Open `http://localhost:3000/?dev=1&midi=test` to bypass Telegram auth.
+## Текущий статус
 
-## Volumes
-
-- `midi_data` - MIDI files storage (persistent)
+- **Наш визуализатор:** собран, не захостен (ждёт субдомен `app.audio2midi.ru`)
+- **Временный:** используется `audio2midi.ru/visualizer` (старый визуализатор Миши)
 
 ## License
 
