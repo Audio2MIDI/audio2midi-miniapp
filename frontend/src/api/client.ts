@@ -11,19 +11,20 @@ const BASE_URL = '/api';
 
 /** Thrown on non-2xx responses or network failures. */
 export class ApiError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number,
-    public readonly body?: unknown,
-  ) {
+  readonly status: number;
+  readonly body?: unknown;
+
+  constructor(message: string, status: number, body?: unknown) {
     super(message);
     this.name = 'ApiError';
+    this.status = status;
+    this.body = body;
   }
 }
 
 /** Return the current Telegram initData string (if available). */
 function getInitData(): string | null {
-  const tg = (window as Record<string, unknown>).Telegram as
+  const tg = (window as unknown as Record<string, unknown>).Telegram as
     | { WebApp?: { initData?: string } }
     | undefined;
   return tg?.WebApp?.initData ?? null;
