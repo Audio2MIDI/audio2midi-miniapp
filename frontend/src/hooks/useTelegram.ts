@@ -22,73 +22,90 @@ interface UseTelegramResult {
   fileUrl: string | null    // Direct MIDI file URL (e.g. S3)
 }
 
+interface TelegramWebApp {
+  initData?: string
+  initDataUnsafe?: {
+    user?: TelegramUser
+    start_param?: string
+  }
+  colorScheme?: 'light' | 'dark'
+  ready: () => void
+  expand: () => void
+}
+
+interface TelegramWindow extends Window {
+  Telegram?: {
+    WebApp?: TelegramWebApp
+  }
+}
+
+interface TelegramState extends UseTelegramResult {
+  webApp: TelegramWebApp | null
+}
+
+function getInitialTelegramState(): TelegramState {
+  const webApp = (window as TelegramWindow).Telegram?.WebApp ?? null
+  const params = new URLSearchParams(window.location.search)
+  const fileUrl = params.get('file')
+  const urlMidi = params.get('midi')
+  const telegramUser = webApp?.initDataUnsafe?.user ?? null
+  const startParam = webApp?.initDataUnsafe?.start_param
+  const midiParam = startParam
+    ? (startParam.startsWith('midi_') ? startParam.slice(5) : startParam)
+    : urlMidi
+
+  if (telegramUser) {
+    return {
+      webApp,
+      isAdmin: ADMIN_IDS.length === 0 || ADMIN_IDS.includes(telegramUser.id),
+      isLoading: false,
+      user: telegramUser,
+      userId: telegramUser.id,
+      colorScheme: webApp?.colorScheme ?? 'dark',
+      isDev: false,
+      initData: webApp?.initData ?? null,
+      midiParam,
+      fileUrl,
+    }
+  }
+
+  if (params.get('dev') === '1') {
+    return {
+      webApp,
+      isAdmin: true,
+      isLoading: false,
+      user: { id: 0, first_name: 'Dev' },
+      userId: null,
+      colorScheme: webApp?.colorScheme ?? 'dark',
+      isDev: true,
+      initData: webApp?.initData ?? null,
+      midiParam,
+      fileUrl,
+    }
+  }
+
+  const isPublicVisualizer = Boolean(fileUrl) || window.location.pathname === '/visualizer'
+  return {
+    webApp,
+    isAdmin: isPublicVisualizer,
+    isLoading: false,
+    user: isPublicVisualizer ? { id: 0, first_name: 'Viewer' } : null,
+    userId: null,
+    colorScheme: webApp?.colorScheme ?? 'dark',
+    isDev: false,
+    initData: webApp?.initData ?? null,
+    midiParam,
+    fileUrl,
+  }
+}
+
 export function useTelegram(): UseTelegramResult {
-  const [isAdmin, setIsAdmin] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-  const [user, setUser] = useState<TelegramUser | null>(null)
-  const [userId, setUserId] = useState<number | null>(null)
-  const [colorScheme, setColorScheme] = useState<'light' | 'dark'>('dark')
-  const [isDev, setIsDev] = useState(false)
-  const [initData, setInitData] = useState<string | null>(null)
-  const [midiParam, setMidiParam] = useState<string | null>(null)
-  const [fileUrl, setFileUrl] = useState<string | null>(null)
+  const [state] = useState(getInitialTelegramState)
 
   useEffect(() => {
-    const tg = (window as any).Telegram?.WebApp
-    const params = new URLSearchParams(window.location.search)
+    state.webApp?.ready()
+    state.webApp?.expand()
+  }, [state.webApp])
 
-    // Check for direct file URL (S3 link via ?file= param, used by visualizer)
-    const urlFile = params.get('file')
-    if (urlFile) {
-      setFileUrl(urlFile)
-    }
-
-    // Check for MIDI param in URL (for dev/testing)
-    const urlMidi = params.get('midi')
-    
-    if (tg && tg.initDataUnsafe?.user) {
-      const tgUser = tg.initDataUnsafe.user as TelegramUser
-      setUser(tgUser)
-      setUserId(tgUser.id)
-      // Если ADMIN_IDS пустой - доступ всем, иначе только админам
-      setIsAdmin(ADMIN_IDS.length === 0 || ADMIN_IDS.includes(tgUser.id))
-      setColorScheme(tg.colorScheme || 'dark')
-      setInitData(tg.initData || null)
-
-      // Get MIDI from Telegram start_param (e.g., t.me/Bot/app?startapp=midi_123)
-      const startParam = tg.initDataUnsafe?.start_param
-      if (startParam) {
-        // Extract midi ID from start_param (format: "midi_ID" or just "ID")
-        const midiId = startParam.startsWith('midi_') 
-          ? startParam.slice(5) 
-          : startParam
-        setMidiParam(midiId)
-      } else if (urlMidi) {
-        setMidiParam(urlMidi)
-      }
-
-      tg.ready()
-      tg.expand()
-    } else {
-      // No Telegram context
-      if (params.get('dev') === '1') {
-        // Dev mode
-        setIsDev(true)
-        setIsAdmin(true)
-        setUser({ id: 0, first_name: 'Dev' })
-        
-        if (urlMidi) {
-          setMidiParam(urlMidi)
-        }
-      } else if (urlFile || window.location.pathname === '/visualizer') {
-        // Visualizer mode — public access via direct URL
-        setIsAdmin(true)
-        setUser({ id: 0, first_name: 'Viewer' })
-      }
-    }
-
-    setIsLoading(false)
-  }, [])
-
-  return { isAdmin, isLoading, user, userId, colorScheme, isDev, initData, midiParam, fileUrl }
+  return state
 }
