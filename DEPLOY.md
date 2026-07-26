@@ -84,8 +84,13 @@ https://your-domain.com/?midi=song_a1b2c3d4
 - При смене домена/пути — поменять URL здесь
 
 ## Текущий статус
-- **Наш визуализатор:** собран, не захостен (нужен сервер с HTTPS, ждём субдомен `app.audio2midi.ru`)
-- **Временный:** используется `audio2midi.ru/visualizer` (старый визуализатор на сервере Миши)
+- **Наш визуализатор:** разворачивается на собственном VPS под
+  `app.audio2midi.ru`; `miniapp.audio2midi.ru` обслуживает тот же build.
+- **Legacy fallback:** `audio2midi.ru/visualizer` на старом сервере остаётся
+  доступным на время проверки и переключения пользователей.
+
+Актуальная production-схема, nginx-конфигурация и rollback описаны в
+[`deploy/README.md`](deploy/README.md).
 
 ## Структура проекта
 

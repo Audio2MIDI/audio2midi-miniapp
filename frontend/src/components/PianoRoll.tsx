@@ -34,14 +34,18 @@ function getStoredOrientation(): Orientation {
   try {
     const stored = localStorage.getItem(ORIENTATION_STORAGE_KEY)
     if (stored === 'horizontal' || stored === 'vertical') return stored
-  } catch {}
+  } catch {
+    // Storage can be unavailable inside a restricted WebView.
+  }
   return 'horizontal'
 }
 
 function setStoredOrientation(o: Orientation) {
   try {
     localStorage.setItem(ORIENTATION_STORAGE_KEY, o)
-  } catch {}
+  } catch {
+    // Keep the current session working even if orientation cannot be persisted.
+  }
 }
 
 interface MidiNote {
@@ -102,6 +106,17 @@ const PianoRoll: React.FC<PianoRollProps> = ({ midiParam, fileUrl, userId, initD
     })
   }, [])
 
+  const stopPlayback = useCallback(() => {
+    setIsPlaying(false)
+    Tone.getTransport().stop()
+    Tone.getTransport().cancel()
+    scheduledRef.current = []
+    if (synthRef.current) {
+      synthRef.current.releaseAll()
+    }
+    setPlayOffset(0)
+  }, [])
+
   /* ── load midi ── */
   const loadMidi = useCallback((buffer: ArrayBuffer, name: string) => {
     try {
@@ -154,7 +169,7 @@ const PianoRoll: React.FC<PianoRollProps> = ({ midiParam, fileUrl, userId, initD
       console.error('Failed to parse MIDI:', e)
       alert('Не удалось прочитать MIDI файл')
     }
-  }, [noteHeight, orientation])
+  }, [noteHeight, orientation, stopPlayback])
 
   /* ── file input ── */
   const handleFile = useCallback((file: File) => {
@@ -279,17 +294,6 @@ const PianoRoll: React.FC<PianoRollProps> = ({ midiParam, fileUrl, userId, initD
     setIsPlaying(true)
     Tone.getTransport().start()
   }, [notes, playOffset, samplerLoaded])
-
-  const stopPlayback = useCallback(() => {
-    setIsPlaying(false)
-    Tone.getTransport().stop()
-    Tone.getTransport().cancel()
-    scheduledRef.current = []
-    if (synthRef.current) {
-      synthRef.current.releaseAll()
-    }
-    setPlayOffset(0)
-  }, [])
 
   /* ── drawing ── */
   const draw = useCallback(() => {
@@ -595,7 +599,7 @@ const PianoRoll: React.FC<PianoRollProps> = ({ midiParam, fileUrl, userId, initD
     if (isPlaying) {
       animFrameRef.current = requestAnimationFrame(draw)
     }
-  }, [notes, midi, zoom, scrollX, scrollY, noteHeight, pixelsPerSec, isPlaying, playStartTime, orientation])
+  }, [notes, midi, scrollX, scrollY, noteHeight, pixelsPerSec, isPlaying, playStartTime, orientation])
 
   /* ── resize ── */
   useEffect(() => {
