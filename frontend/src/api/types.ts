@@ -70,6 +70,59 @@ export interface AccountSummary {
 
 export interface AccountResponse {
   account: AccountSummary;
+  merge_required?: false;
+}
+
+export interface MergeRequiredResponse {
+  merge_required: true;
+  merge_token: string;
+  expires_seconds: number;
+}
+
+export type AuthenticationResponse = AccountResponse | MergeRequiredResponse;
+
+export interface AuthCapabilities {
+  email_otp: boolean;
+  telegram: boolean;
+}
+
+export interface AccountIdentity {
+  provider: 'telegram' | 'supabase' | string;
+  metadata: {
+    email?: string;
+    username?: string;
+  };
+  verified_at: string | null;
+  last_authenticated_at: string | null;
+  created_at: string;
+}
+
+export interface AccountProfile {
+  account_id: string;
+  display_name: string | null;
+  locale: 'ru' | 'en';
+  created_at: string;
+  updated_at: string;
+  identities: AccountIdentity[];
+}
+
+export interface ProfileResponse {
+  profile: AccountProfile;
+}
+
+export interface WebSession {
+  id: string;
+  device_label: string | null;
+  auth_provider: string | null;
+  created_at: string;
+  last_seen_at: string;
+  expires_at: string;
+  revoked_at: string | null;
+  is_current: boolean;
+}
+
+export interface SessionsResponse {
+  sessions: WebSession[];
 }
 
 export interface LibraryArtifact {

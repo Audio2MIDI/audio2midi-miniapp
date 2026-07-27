@@ -1,14 +1,37 @@
-import { get, post } from './client'
+import { del, get, patch, post } from './client'
 import type {
   AccountResponse,
+  AuthenticationResponse,
+  AuthCapabilities,
   LibraryResponse,
+  ProfileResponse,
   ProjectDetailResponse,
   ProjectSubmitResponse,
   ProjectUploadResponse,
+  SessionsResponse,
 } from './types'
 
-export async function authenticateWithTelegram(initData: string): Promise<AccountResponse> {
-  return post<AccountResponse>('/v1/auth/telegram', { init_data: initData })
+export async function authenticateWithTelegram(initData: string): Promise<AuthenticationResponse> {
+  return post<AuthenticationResponse>('/v1/auth/telegram', { init_data: initData })
+}
+
+export async function getAuthCapabilities(): Promise<AuthCapabilities> {
+  return get<AuthCapabilities>('/v1/auth/capabilities')
+}
+
+export async function startEmailAuthentication(email: string): Promise<void> {
+  await post<{ accepted: boolean }>('/v1/auth/email/start', { email })
+}
+
+export async function verifyEmailAuthentication(
+  email: string,
+  token: string,
+): Promise<AuthenticationResponse> {
+  return post<AuthenticationResponse>('/v1/auth/email/verify', { email, token })
+}
+
+export async function confirmAccountMerge(mergeToken: string): Promise<AccountResponse> {
+  return post<AccountResponse>('/v1/auth/merge/confirm', { merge_token: mergeToken })
 }
 
 export async function getCurrentAccount(): Promise<AccountResponse> {
@@ -21,6 +44,33 @@ export async function getLibrary(limit = 50): Promise<LibraryResponse> {
 
 export async function logout(): Promise<void> {
   await post<void>('/v1/auth/logout')
+}
+
+export async function getProfile(): Promise<ProfileResponse> {
+  return get<ProfileResponse>('/v1/me/profile')
+}
+
+export async function updateProfile(input: {
+  display_name: string | null
+  locale: 'ru' | 'en'
+}): Promise<ProfileResponse> {
+  return patch<ProfileResponse>('/v1/me/profile', input)
+}
+
+export async function getSessions(): Promise<SessionsResponse> {
+  return get<SessionsResponse>('/v1/me/sessions')
+}
+
+export async function revokeSession(sessionId: string): Promise<void> {
+  await del(`/v1/me/sessions/${encodeURIComponent(sessionId)}`)
+}
+
+export async function revokeOtherSessions(): Promise<{ revoked: number }> {
+  return post<{ revoked: number }>('/v1/me/sessions/revoke-others')
+}
+
+export async function disableAutoRenew(): Promise<void> {
+  await post('/v1/me/subscription/auto-renew/disable')
 }
 
 export async function createProjectUpload(input: {

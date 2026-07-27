@@ -104,7 +104,11 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
           if (!(authError instanceof ApiError) || authError.status !== 401 || !initData) {
             throw authError
           }
-          response = await authenticateWithTelegram(initData)
+          const authentication = await authenticateWithTelegram(initData)
+          if ('merge_required' in authentication && authentication.merge_required) {
+            throw new ApiError('Сначала объедините аккаунты в профиле.', 409)
+          }
+          response = authentication
         }
         if (!cancelled) setPage({ kind: 'ready', account: response.account })
       } catch (authError) {
