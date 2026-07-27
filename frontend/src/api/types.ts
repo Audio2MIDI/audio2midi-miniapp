@@ -50,3 +50,50 @@ export interface ListResponse {
   ok: boolean;
   files: MidiFileEntry[];
 }
+
+export interface AccountSummary {
+  account_id: string;
+  account_created_at: string;
+  username: string | null;
+  language: string | null;
+  remaining_requests: number | null;
+  balance: number | null;
+  subscription_until: string | null;
+  subscription_period: string | null;
+  subscription_price_rub: number | null;
+  auto_renew: boolean | null;
+  next_charge_at: string | null;
+  subscription_status: string | null;
+  result_count: number;
+  active_job_count: number;
+}
+
+export interface AccountResponse {
+  account: AccountSummary;
+}
+
+export interface LibraryArtifact {
+  id: string;
+  role: string;
+  size_bytes: number | null;
+  mime_type: string;
+  download_url: string;
+}
+
+export interface LibraryItem {
+  id: string;
+  source: 'job' | 'legacy';
+  engine: string;
+  status: string;
+  created_at: string;
+  finished_at: string | null;
+  sanitized_error: string | null;
+  delivery_state: string;
+  preparation_state: string;
+  title: string;
+  artifacts: LibraryArtifact[];
+}
+
+export interface LibraryResponse {
+  items: LibraryItem[];
+}

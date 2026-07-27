@@ -1,4 +1,13 @@
-# Audio2MIDI Mini App
+# Audio2MIDI Web App
+
+Личный кабинет и Piano Roll визуализатор Audio2MIDI. Корневая страница
+показывает подписку, активные задания и историю результатов. Режим
+`?file=...`, `?midi=...` или `/visualizer` открывает существующий Piano Roll.
+
+Продакшн расположен на управляемом Audio2MIDI VPS:
+`https://app.audio2midi.ru`. Статика обслуживается nginx, а `/api/`
+проксируется в защищённый account API на loopback-порту 8400. Старый backend
+мини-приложения на порту 3001 не является production API.
 
 Piano Roll визуализатор MIDI файлов для Telegram Mini App.  
 Работает целиком в браузере — парсит MIDI и рисует ноты на Canvas с воспроизведением через Grand Piano (Salamander samples).
@@ -22,10 +31,8 @@ docker compose ps
 ## Quick Start (Dev)
 
 ```bash
-# Backend
-cd backend
-uv sync
-uv run uvicorn app:app --host 0.0.0.0 --port 3001 --reload
+# Account API (из основного Audio2MIDI repo)
+uvicorn web_api.app:app --host 127.0.0.1 --port 8400 --reload
 
 # Frontend (в другом терминале)
 cd frontend
@@ -33,7 +40,7 @@ npm install
 npm run dev  # http://localhost:3000
 ```
 
-Vite проксирует `/api/*` на backend (:3001).
+Vite проксирует `/api/*` на account API (:8400), удаляя префикс `/api`.
 
 ### Тестирование в браузере
 

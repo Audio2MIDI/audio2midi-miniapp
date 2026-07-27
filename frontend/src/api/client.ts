@@ -49,10 +49,14 @@ async function handleResponse<T>(response: Response): Promise<T> {
     } catch {
       body = await response.text().catch(() => null);
     }
-    const message =
-      (body && typeof body === 'object' && 'error' in body
-        ? String((body as Record<string, unknown>).error)
-        : null) ?? `HTTP ${response.status}`;
+    const payload = body && typeof body === 'object'
+      ? body as Record<string, unknown>
+      : null;
+    const message = payload?.detail
+      ? String(payload.detail)
+      : payload?.error
+        ? String(payload.error)
+        : `HTTP ${response.status}`;
     throw new ApiError(message, response.status, body);
   }
   return response.json() as Promise<T>;
@@ -74,6 +78,7 @@ export async function get<T>(
   const response = await fetch(url.toString(), {
     method: 'GET',
     headers: buildHeaders(),
+    credentials: 'include',
   });
   return handleResponse<T>(response);
 }
@@ -98,6 +103,10 @@ export async function post<T>(
     method: 'POST',
     headers,
     body: fetchBody,
+    credentials: 'include',
   });
+  if (response.status === 204) {
+    return undefined as T;
+  }
   return handleResponse<T>(response);
 }
