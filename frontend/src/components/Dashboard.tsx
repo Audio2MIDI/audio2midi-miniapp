@@ -359,14 +359,17 @@ export default function Dashboard({ initData, colorScheme }: DashboardProps) {
 
         <footer className="cabinet-footer">
           <span>Audio2MIDI · 2026</span>
-          <button
-            onClick={async () => {
-              await logout()
-              window.location.reload()
-            }}
-          >
-            Выйти
-          </button>
+          <div className="cabinet-footer__actions">
+            <a href="/support">Поддержка и отмена подписки</a>
+            <button
+              onClick={async () => {
+                await logout()
+                window.location.reload()
+              }}
+            >
+              Выйти
+            </button>
+          </div>
         </footer>
       </div>
     </main>

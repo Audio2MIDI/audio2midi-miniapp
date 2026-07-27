@@ -4,12 +4,17 @@ import Dashboard from './components/Dashboard'
 import NewProject from './components/NewProject'
 import ProjectPage from './components/ProjectPage'
 import ResearchLab from './components/ResearchLab'
+import Support from './components/Support'
 
 function App() {
   const { isLoading, userId, colorScheme, isDev, initData, midiParam, fileUrl } = useTelegram()
 
   if (window.location.pathname.startsWith('/research/listening')) {
     return <ResearchLab />
+  }
+
+  if (window.location.pathname === '/support') {
+    return <Support colorScheme={colorScheme} />
   }
 
   if (isLoading) {
