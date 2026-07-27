@@ -1,6 +1,8 @@
 import { useTelegram } from './hooks/useTelegram'
 import PianoRoll from './components/PianoRoll'
 import Dashboard from './components/Dashboard'
+import NewProject from './components/NewProject'
+import ProjectPage from './components/ProjectPage'
 import ResearchLab from './components/ResearchLab'
 
 function App() {
@@ -27,6 +29,21 @@ function App() {
 
   const isVisualizer = Boolean(fileUrl || midiParam)
     || window.location.pathname === '/visualizer'
+
+  if (window.location.pathname === '/new') {
+    return <NewProject initData={initData} colorScheme={colorScheme} />
+  }
+
+  const projectMatch = window.location.pathname.match(/^\/tracks\/([0-9a-f-]+)$/i)
+  if (projectMatch) {
+    return (
+      <ProjectPage
+        projectId={projectMatch[1]}
+        initData={initData}
+        colorScheme={colorScheme}
+      />
+    )
+  }
 
   if (!isVisualizer) {
     return <Dashboard initData={initData} colorScheme={colorScheme} />

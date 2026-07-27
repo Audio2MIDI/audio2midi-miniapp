@@ -82,6 +82,7 @@ export interface LibraryArtifact {
 
 export interface LibraryItem {
   id: string;
+  project_id: string | null;
   source: 'job' | 'legacy';
   engine: string;
   status: string;
@@ -96,4 +97,57 @@ export interface LibraryItem {
 
 export interface LibraryResponse {
   items: LibraryItem[];
+}
+
+export interface ProjectUploadResponse {
+  project: {
+    id: string;
+    title: string;
+    status: string;
+    source_filename: string;
+  };
+  upload_url: string;
+  required_headers: Record<string, string>;
+  expires_seconds: number;
+}
+
+export interface ProjectSubmitResponse {
+  created: boolean;
+  project_id: string;
+  job_id: string;
+  pending_result_id: string;
+  queue_position: number;
+  worker_available: boolean;
+}
+
+export interface ProjectVersion {
+  version_id: string;
+  version_kind: string;
+  version_label: string;
+  version_created_at: string;
+  job_id: string;
+  engine: string;
+  status: string;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  sanitized_error: string | null;
+  delivery_state: string | null;
+  preparation_state: string | null;
+  artifacts: LibraryArtifact[];
+}
+
+export interface ProjectDetail {
+  id: string;
+  title: string;
+  status: string;
+  source_filename: string;
+  source_size_bytes: number;
+  source_mime_type: string;
+  created_at: string;
+  versions: ProjectVersion[];
+}
+
+export interface ProjectDetailResponse {
+  project: ProjectDetail;
 }

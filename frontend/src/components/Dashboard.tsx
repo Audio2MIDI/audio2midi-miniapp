@@ -92,7 +92,11 @@ function ResultCard({ item }: { item: LibraryItem }) {
           {item.engine === 'audio_separator' ? '◐' : item.engine === 'video_render' ? '▶' : '♪'}
         </div>
         <div className="result-card__identity">
-          <h3>{item.title}</h3>
+          <h3>
+            {item.project_id
+              ? <a href={`/tracks/${item.project_id}`}>{item.title}</a>
+              : item.title}
+          </h3>
           <p>
             {METHOD_NAMES[item.engine] ?? item.engine}
             <span>·</span>
@@ -275,6 +279,10 @@ export default function Dashboard({ initData, colorScheme }: DashboardProps) {
             <p className="hero-copy">
               Транскрипции, ноты и аудиофайлы собраны в одном месте.
             </p>
+            <a className="hero-new-project" href="/new">
+              Новая композиция
+              <span>→</span>
+            </a>
           </div>
           <div className="hero-note-field" aria-hidden="true">
             <span style={{ '--note-x': '8%', '--note-y': '68%', '--note-w': '26%' } as React.CSSProperties} />
@@ -343,8 +351,8 @@ export default function Dashboard({ initData, colorScheme }: DashboardProps) {
             <div className="empty-library">
               <div className="empty-library__staff">♩ ♪ ♫</div>
               <h3>Здесь появятся ваши результаты</h3>
-              <p>Отправьте песню боту — готовая транскрипция сохранится автоматически.</p>
-              <a href="https://t.me/Audio2MIDIBot">Перейти в бот →</a>
+              <p>Загрузите аудиофайл прямо здесь или отправьте песню Telegram-боту.</p>
+              <a href="/new">Создать композицию →</a>
             </div>
           )}
         </section>

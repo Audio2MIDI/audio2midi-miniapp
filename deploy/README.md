@@ -41,6 +41,24 @@ curl -fsS https://app.audio2midi.ru/ | grep -q '/assets/index-'
 Validate a real `?file=` URL without printing its presigned S3 credentials in
 logs or shell history.
 
+## Web Studio
+
+Authenticated users can now create and follow projects at:
+
+```text
+https://app.audio2midi.ru/new
+https://app.audio2midi.ru/tracks/<project-id>
+```
+
+Audio is uploaded directly from the browser to private S3 with a short-lived
+signed `PUT`. The bucket CORS policy must allow `PUT` from
+`https://app.audio2midi.ru` and `https://miniapp.audio2midi.ru`, including the
+`content-type` and `x-amz-meta-sha256` request headers.
+
+The browser then submits only the verified object manifest to the account API.
+The project page polls durable job state and exposes account-owned artifacts
+through the existing short-lived download redirects.
+
 ## Internal Listening Lab
 
 The internal blind A/B viewer is served from:
