@@ -4,6 +4,8 @@ The production frontend is served as static files by nginx:
 
 - canonical URL: `https://app.audio2midi.ru`
 - compatibility URL: `https://miniapp.audio2midi.ru`
+- `https://www.audio2midi.ru` permanently redirects to the legacy canonical
+  landing page at `https://audio2midi.ru`
 - release root: `/opt/audio2midi-web/releases/<git-sha>`
 - active symlink: `/opt/audio2midi-web/current`
 
@@ -23,6 +25,10 @@ is being validated.
    `deploy/nginx/app.audio2midi.ru.conf`.
 
 Always run `nginx -t` before reloading nginx.
+
+The `www` redirect is installed independently from
+`deploy/nginx/www.audio2midi.ru.conf` and uses its own Let's Encrypt
+certificate.
 
 ## Release validation
 
