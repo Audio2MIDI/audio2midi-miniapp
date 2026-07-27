@@ -214,7 +214,7 @@ export default function Dashboard({ initData, colorScheme }: DashboardProps) {
             Откройте кабинет через Telegram — история, подписка и результаты
             появятся автоматически.
           </p>
-          <a className="primary-action" href="https://t.me/audio2midi_bot?startapp=cabinet">
+          <a className="primary-action" href="https://t.me/Audio2MIDIBot?startapp=cabinet">
             Открыть через Telegram
             <span>→</span>
           </a>
@@ -338,7 +338,7 @@ export default function Dashboard({ initData, colorScheme }: DashboardProps) {
               <div className="empty-library__staff">♩ ♪ ♫</div>
               <h3>Здесь появятся ваши результаты</h3>
               <p>Отправьте песню боту — готовая транскрипция сохранится автоматически.</p>
-              <a href="https://t.me/audio2midi_bot">Перейти в бот →</a>
+              <a href="https://t.me/Audio2MIDIBot">Перейти в бот →</a>
             </div>
           )}
         </section>
