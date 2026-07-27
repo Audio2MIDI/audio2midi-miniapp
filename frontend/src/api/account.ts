@@ -42,6 +42,7 @@ export async function uploadProjectSource(
     method: 'PUT',
     headers: requiredHeaders,
     body: file,
+    credentials: 'include',
   })
   if (!response.ok) {
     throw new Error(`Не удалось загрузить файл: HTTP ${response.status}`)

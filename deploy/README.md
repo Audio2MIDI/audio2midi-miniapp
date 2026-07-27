@@ -50,10 +50,11 @@ https://app.audio2midi.ru/new
 https://app.audio2midi.ru/tracks/<project-id>
 ```
 
-Audio is uploaded directly from the browser to private S3 with a short-lived
-signed `PUT`. The bucket CORS policy must allow `PUT` from
-`https://app.audio2midi.ru` and `https://miniapp.audio2midi.ru`, including the
-`content-type` and `x-amz-meta-sha256` request headers.
+By default audio is uploaded through the authenticated web API and immediately
+written to private S3. This avoids depending on bucket-level CORS permissions.
+Set `WEB_DIRECT_S3_UPLOAD=true` only after the bucket CORS policy allows `PUT`
+from `https://app.audio2midi.ru` and `https://miniapp.audio2midi.ru`, including
+the `content-type` and `x-amz-meta-sha256` request headers.
 
 The browser then submits only the verified object manifest to the account API.
 The project page polls durable job state and exposes account-owned artifacts
