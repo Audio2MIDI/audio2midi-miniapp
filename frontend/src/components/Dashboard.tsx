@@ -206,6 +206,9 @@ export default function Dashboard({ initData, colorScheme }: DashboardProps) {
   if (state.kind === 'signed-out') {
     return (
       <main className="cabinet-shell cabinet-shell--centered" data-theme={colorScheme}>
+        <a className="cabinet-home-link" href="https://audio2midi.ru">
+          Audio2MIDI
+        </a>
         <section className="sign-in-card">
           <div className="brand-mark">♪</div>
           <p className="eyebrow">Audio2MIDI</p>
@@ -227,6 +230,9 @@ export default function Dashboard({ initData, colorScheme }: DashboardProps) {
   if (state.kind === 'error') {
     return (
       <main className="cabinet-shell cabinet-shell--centered" data-theme={colorScheme}>
+        <a className="cabinet-home-link" href="https://audio2midi.ru">
+          Audio2MIDI
+        </a>
         <section className="sign-in-card">
           <div className="brand-mark brand-mark--warning">!</div>
           <h1>Что-то пошло не так</h1>
@@ -246,13 +252,13 @@ export default function Dashboard({ initData, colorScheme }: DashboardProps) {
     <main className="cabinet-shell" data-theme={colorScheme}>
       <div className="cabinet-container">
         <header className="cabinet-header">
-          <div className="brand">
+          <a className="brand" href="https://audio2midi.ru">
             <div className="brand-mark">♪</div>
             <div>
               <strong>Audio2MIDI</strong>
               <span>Музыка становится видимой</span>
             </div>
-          </div>
+          </a>
           <div className="profile-chip">
             <div className="profile-avatar">{displayName.replace('@', '').slice(0, 1).toUpperCase()}</div>
             <div>
