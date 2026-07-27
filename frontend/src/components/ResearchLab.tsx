@@ -4,6 +4,7 @@ import {
   getNextResearchComparison,
   getResearchResults,
   listResearchExperiments,
+  listResearchTracks,
   submitResearchVote,
 } from '../api/research'
 import type {
@@ -12,6 +13,7 @@ import type {
   ResearchProgress,
   ResearchResults,
   ResearchSample,
+  ResearchTrack,
   ResearchVote,
 } from '../api/research'
 
@@ -47,9 +49,11 @@ function sessionId(): string {
 function ResearchPlayer({
   sample,
   onPlay,
+  onOpenPianoRoll,
 }: {
   sample: ResearchSample
   onPlay: (element: HTMLAudioElement) => void
+  onOpenPianoRoll: (sample: ResearchSample) => void
 }) {
   return (
     <article className="research-variant">
@@ -64,10 +68,22 @@ function ResearchPlayer({
         onPlay={(event) => onPlay(event.currentTarget)}
       />
       {sample.piano_roll_url && (
-        <details className="research-pianoroll">
-          <summary>Показать piano roll</summary>
-          <img src={sample.piano_roll_url} alt={`Piano roll ${sample.label}`} loading="lazy" />
-        </details>
+        <div className="research-pianoroll">
+          <div className="research-pianoroll__header">
+            <span>Piano roll</span>
+            <button type="button" onClick={() => onOpenPianoRoll(sample)}>
+              Увеличить ↗
+            </button>
+          </div>
+          <button
+            className="research-pianoroll__preview"
+            type="button"
+            onClick={() => onOpenPianoRoll(sample)}
+            aria-label={`Увеличить piano roll варианта ${sample.label}`}
+          >
+            <img src={sample.piano_roll_url} alt={`Piano roll ${sample.label}`} />
+          </button>
+        </div>
       )}
       <a className="research-download" href={sample.midi_url}>
         Скачать MIDI
@@ -130,14 +146,21 @@ function ResultsView({ results }: { results: ResearchResults }) {
 export default function ResearchLab() {
   const [experiments, setExperiments] = useState<ResearchExperiment[]>([])
   const [experimentId, setExperimentId] = useState('')
+  const [tracks, setTracks] = useState<ResearchTrack[]>([])
+  const [trackId, setTrackId] = useState('')
   const [comparison, setComparison] = useState<ResearchComparison | null>(null)
   const [progress, setProgress] = useState<ResearchProgress>({ completed: 0, total: 0 })
+  const [experimentProgress, setExperimentProgress] = useState<ResearchProgress>({
+    completed: 0,
+    total: 0,
+  })
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [comment, setComment] = useState('')
   const [state, setState] = useState<LoadState>('loading')
   const [error, setError] = useState('')
   const [view, setView] = useState<View>('compare')
   const [results, setResults] = useState<ResearchResults | null>(null)
+  const [expandedPianoRoll, setExpandedPianoRoll] = useState<ResearchSample | null>(null)
   const startedAt = useRef(0)
   const activeAudio = useRef<HTMLAudioElement | null>(null)
 
@@ -145,14 +168,19 @@ export default function ResearchLab() {
     () => experiments.find((item) => item.id === experimentId) ?? null,
     [experimentId, experiments],
   )
+  const activeTrackIndex = useMemo(
+    () => tracks.findIndex((item) => item.id === trackId),
+    [trackId, tracks],
+  )
 
-  const loadNext = useCallback(async (id: string) => {
+  const loadNext = useCallback(async (id: string, selectedTrackId: string) => {
     setState('loading')
     setError('')
     try {
-      const payload = await getNextResearchComparison(id)
+      const payload = await getNextResearchComparison(id, selectedTrackId)
       setComparison(payload.comparison)
       setProgress(payload.progress)
+      setExperimentProgress(payload.experiment_progress)
       setSelectedTags([])
       setComment('')
       startedAt.current = performance.now()
@@ -161,6 +189,12 @@ export default function ResearchLab() {
       setError(loadError instanceof Error ? loadError.message : 'Не удалось загрузить сравнение')
       setState('error')
     }
+  }, [])
+
+  const refreshTracks = useCallback(async (id: string) => {
+    const items = await listResearchTracks(id)
+    setTracks(items)
+    return items
   }, [])
 
   useEffect(() => {
@@ -175,14 +209,23 @@ export default function ResearchLab() {
           return
         }
         setExperimentId(first.id)
-        await loadNext(first.id)
+        const trackItems = await refreshTracks(first.id)
+        const firstTrack = trackItems.find((item) => item.completed < item.total)
+          ?? trackItems[0]
+        if (!firstTrack) {
+          setError('В эксперименте пока нет композиций')
+          setState('error')
+          return
+        }
+        setTrackId(firstTrack.id)
+        await loadNext(first.id, firstTrack.id)
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : 'Не удалось открыть лабораторию')
         setState('error')
       }
     }
     void load()
-  }, [loadNext])
+  }, [loadNext, refreshTracks])
 
   const pauseOtherPlayers = useCallback((element: HTMLAudioElement) => {
     if (activeAudio.current && activeAudio.current !== element) {
@@ -208,12 +251,13 @@ export default function ResearchLab() {
         response_ms: Math.max(0, Math.round(performance.now() - startedAt.current)),
       })
       activeAudio.current?.pause()
-      await loadNext(comparison.experiment_id)
+      await refreshTracks(comparison.experiment_id)
+      await loadNext(comparison.experiment_id, comparison.track.id)
     } catch (voteError) {
       setError(voteError instanceof Error ? voteError.message : 'Не удалось сохранить оценку')
       setState('ready')
     }
-  }, [comment, comparison, loadNext, selectedTags, state])
+  }, [comment, comparison, loadNext, refreshTracks, selectedTags, state])
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -239,6 +283,28 @@ export default function ResearchLab() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [comparison, view, vote])
 
+  useEffect(() => {
+    if (!expandedPianoRoll) return
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') setExpandedPianoRoll(null)
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [expandedPianoRoll])
+
+  async function selectTrack(nextTrackId: string) {
+    if (!experimentId || nextTrackId === trackId) return
+    activeAudio.current?.pause()
+    setTrackId(nextTrackId)
+    setView('compare')
+    await loadNext(experimentId, nextTrackId)
+  }
+
+  async function moveTrack(offset: number) {
+    const nextTrack = tracks[activeTrackIndex + offset]
+    if (nextTrack) await selectTrack(nextTrack.id)
+  }
+
   async function showResults() {
     if (!experimentId) return
     setState('loading')
@@ -255,7 +321,7 @@ export default function ResearchLab() {
 
   async function showCompare() {
     setView('compare')
-    if (experimentId) await loadNext(experimentId)
+    if (experimentId && trackId) await loadNext(experimentId, trackId)
   }
 
   function toggleTag(tag: string) {
@@ -266,8 +332,8 @@ export default function ResearchLab() {
     ))
   }
 
-  const percent = progress.total > 0
-    ? Math.round((progress.completed / progress.total) * 100)
+  const percent = experimentProgress.total > 0
+    ? Math.round((experimentProgress.completed / experimentProgress.total) * 100)
     : 0
 
   return (
@@ -296,7 +362,9 @@ export default function ResearchLab() {
           <h1>Слушаем модель,<br />а не её название.</h1>
           <div className="research-intro__meta">
             <span>{activeExperiment?.title ?? 'Загрузка эксперимента'}</span>
-            <span>{progress.completed} / {progress.total} сравнений</span>
+            <span>
+              {experimentProgress.completed} / {experimentProgress.total} сравнений
+            </span>
           </div>
           <div className="research-progress">
             <span style={{ width: `${percent}%` }} />
@@ -307,6 +375,54 @@ export default function ResearchLab() {
 
         {view === 'results' && results && <ResultsView results={results} />}
 
+        {view === 'compare' && tracks.length > 0 && (
+          <section className="research-track-nav">
+            <div className="research-track-picker">
+              <label htmlFor="research-track">Композиция</label>
+              <select
+                id="research-track"
+                value={trackId}
+                onChange={(event) => void selectTrack(event.target.value)}
+                disabled={state === 'submitting'}
+              >
+                {tracks.map((track, index) => (
+                  <option value={track.id} key={track.id}>
+                    {index + 1}. {track.title} · {track.completed}/{track.total}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="research-track-nav__status">
+              <span>
+                {progress.total > 0
+                  ? `${progress.completed} из ${progress.total} пар оценено`
+                  : 'Загрузка прогресса'}
+              </span>
+              <div>
+                <button
+                  type="button"
+                  onClick={() => void moveTrack(-1)}
+                  disabled={activeTrackIndex <= 0 || state === 'submitting'}
+                  aria-label="Предыдущая композиция"
+                >
+                  ← Предыдущая
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void moveTrack(1)}
+                  disabled={
+                    activeTrackIndex < 0
+                    || activeTrackIndex >= tracks.length - 1
+                    || state === 'submitting'
+                  }
+                >
+                  Следующая композиция →
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
+
         {view === 'compare' && state === 'loading' && (
           <div className="research-loading">Готовлю следующую слепую пару…</div>
         )}
@@ -314,9 +430,16 @@ export default function ResearchLab() {
         {view === 'compare' && state !== 'loading' && !comparison && !error && (
           <section className="research-complete">
             <span>✓</span>
-            <h2>Все пары этого эксперимента оценены</h2>
-            <p>Теперь можно открыть результаты и посмотреть победы, ничьи и частые артефакты.</p>
-            <button onClick={() => void showResults()}>Открыть результаты</button>
+            <h2>Эта композиция полностью оценена</h2>
+            <p>
+              Можно перейти к следующей композиции или открыть общие результаты эксперимента.
+            </p>
+            <div className="research-complete__actions">
+              {activeTrackIndex >= 0 && activeTrackIndex < tracks.length - 1 && (
+                <button onClick={() => void moveTrack(1)}>Следующая композиция →</button>
+              )}
+              <button onClick={() => void showResults()}>Открыть результаты</button>
+            </div>
           </section>
         )}
 
@@ -337,8 +460,16 @@ export default function ResearchLab() {
             </section>
 
             <section className="research-variants">
-              <ResearchPlayer sample={comparison.left} onPlay={pauseOtherPlayers} />
-              <ResearchPlayer sample={comparison.right} onPlay={pauseOtherPlayers} />
+              <ResearchPlayer
+                sample={comparison.left}
+                onPlay={pauseOtherPlayers}
+                onOpenPianoRoll={setExpandedPianoRoll}
+              />
+              <ResearchPlayer
+                sample={comparison.right}
+                onPlay={pauseOtherPlayers}
+                onOpenPianoRoll={setExpandedPianoRoll}
+              />
             </section>
 
             <section className="research-review">
@@ -390,6 +521,35 @@ export default function ResearchLab() {
           </>
         )}
       </div>
+      {expandedPianoRoll?.piano_roll_url && (
+        <div
+          className="research-lightbox"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Piano roll варианта ${expandedPianoRoll.label}`}
+          onClick={() => setExpandedPianoRoll(null)}
+        >
+          <div
+            className="research-lightbox__content"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div>
+              <span>Piano roll · вариант {expandedPianoRoll.label}</span>
+              <button
+                type="button"
+                onClick={() => setExpandedPianoRoll(null)}
+                aria-label="Закрыть piano roll"
+              >
+                Закрыть ×
+              </button>
+            </div>
+            <img
+              src={expandedPianoRoll.piano_roll_url}
+              alt={`Piano roll варианта ${expandedPianoRoll.label}`}
+            />
+          </div>
+        </div>
+      )}
     </main>
   )
 }

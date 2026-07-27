@@ -20,9 +20,18 @@ export interface ResearchSample {
   piano_roll_url: string | null
 }
 
+export interface ResearchTrack {
+  id: string
+  title: string
+  artist: string
+  completed: number
+  total: number
+}
+
 export interface ResearchComparison {
   experiment_id: string
   track: {
+    id: string
     title: string
     artist: string
     source_audio_url: string
@@ -39,6 +48,7 @@ export interface ResearchProgress {
 export interface NextComparisonResponse {
   comparison: ResearchComparison | null
   progress: ResearchProgress
+  experiment_progress: ResearchProgress
 }
 
 export interface ResearchConditionResult {
@@ -93,11 +103,39 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         }],
       } as T
     }
-    if (path.endsWith('/next')) {
+    if (path.endsWith('/tracks')) {
+      return {
+        tracks: [
+          {
+            id: 'midnight-arrangement',
+            title: 'Midnight arrangement',
+            artist: 'Internal eval set',
+            completed: mockCompleted,
+            total: 9,
+          },
+          {
+            id: 'northern-lights',
+            title: 'Northern lights',
+            artist: 'Internal eval set',
+            completed: 3,
+            total: 9,
+          },
+          {
+            id: 'quiet-room',
+            title: 'Quiet room',
+            artist: 'Internal eval set',
+            completed: 0,
+            total: 9,
+          },
+        ],
+      } as T
+    }
+    if (path.includes('/next')) {
       return {
         comparison: {
           experiment_id: 'listening-lab-preview',
           track: {
+            id: 'midnight-arrangement',
             title: 'Midnight arrangement',
             artist: 'Internal eval set',
             source_audio_url: 'data:audio/wav;base64,',
@@ -117,7 +155,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
             piano_roll_url: null,
           },
         },
-        progress: { completed: mockCompleted, total: 108 },
+        progress: { completed: mockCompleted, total: 9 },
+        experiment_progress: { completed: mockCompleted, total: 108 },
       } as T
     }
     if (path === '/votes' && init?.method === 'POST') {
@@ -172,11 +211,24 @@ export async function listResearchExperiments(): Promise<ResearchExperiment[]> {
   return payload.experiments
 }
 
+export async function listResearchTracks(
+  experimentId: string,
+): Promise<ResearchTrack[]> {
+  const payload = await request<{ tracks: ResearchTrack[] }>(
+    `/experiments/${encodeURIComponent(experimentId)}/tracks`,
+  )
+  return payload.tracks
+}
+
 export function getNextResearchComparison(
   experimentId: string,
+  trackId?: string,
 ): Promise<NextComparisonResponse> {
+  const params = trackId
+    ? `?track_id=${encodeURIComponent(trackId)}`
+    : ''
   return request<NextComparisonResponse>(
-    `/experiments/${encodeURIComponent(experimentId)}/next`,
+    `/experiments/${encodeURIComponent(experimentId)}/next${params}`,
   )
 }
 

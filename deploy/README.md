@@ -49,6 +49,10 @@ The internal blind A/B viewer is served from:
 https://app.audio2midi.ru/research/listening
 ```
 
+The review UI keeps both piano rolls visible, supports full-screen inspection,
+and obtains composition selection, previous/next navigation and progress from
+the protected research API.
+
 It is intentionally absent from public navigation. Before enabling the route:
 
 1. Create `/etc/nginx/audio2midi-research.htpasswd`.
