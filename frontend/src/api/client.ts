@@ -110,3 +110,29 @@ export async function post<T>(
   }
   return handleResponse<T>(response);
 }
+
+/** PATCH request with a JSON body. */
+export async function patch<T>(
+  path: string,
+  body: Record<string, unknown>,
+): Promise<T> {
+  const headers = buildHeaders({ 'Content-Type': 'application/json' });
+  const response = await fetch(`${BASE_URL}${path}`, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify(body),
+    credentials: 'include',
+  });
+  return handleResponse<T>(response);
+}
+
+/** DELETE request. */
+export async function del(path: string): Promise<void> {
+  const response = await fetch(`${BASE_URL}${path}`, {
+    method: 'DELETE',
+    headers: buildHeaders(),
+    credentials: 'include',
+  });
+  if (response.status === 204) return;
+  await handleResponse<unknown>(response);
+}

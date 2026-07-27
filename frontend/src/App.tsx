@@ -3,6 +3,7 @@ import PianoRoll from './components/PianoRoll'
 import Dashboard from './components/Dashboard'
 import NewProject from './components/NewProject'
 import ProjectPage from './components/ProjectPage'
+import Profile from './components/Profile'
 import ResearchLab from './components/ResearchLab'
 import Support from './components/Support'
 
@@ -37,6 +38,10 @@ function App() {
 
   if (window.location.pathname === '/new') {
     return <NewProject initData={initData} colorScheme={colorScheme} />
+  }
+
+  if (window.location.pathname === '/profile') {
+    return <Profile initData={initData} colorScheme={colorScheme} />
   }
 
   const projectMatch = window.location.pathname.match(/^\/tracks\/([0-9a-f-]+)$/i)

@@ -8,6 +8,7 @@ import {
 } from '../api/account'
 import { ApiError } from '../api/client'
 import type { AccountSummary, LibraryItem } from '../api/types'
+import EmailAuthForm from './EmailAuthForm'
 
 interface DashboardProps {
   initData: string | null
@@ -153,7 +154,11 @@ export default function Dashboard({ initData, colorScheme }: DashboardProps) {
           if (!(error instanceof ApiError) || error.status !== 401 || !initData) {
             throw error
           }
-          accountResponse = await authenticateWithTelegram(initData)
+          const authentication = await authenticateWithTelegram(initData)
+          if ('merge_required' in authentication && authentication.merge_required) {
+            throw new ApiError('Требуется объединить аккаунты в профиле.', 409)
+          }
+          accountResponse = authentication
         }
         const library = await getLibrary()
         if (!cancelled) {
@@ -218,14 +223,16 @@ export default function Dashboard({ initData, colorScheme }: DashboardProps) {
           <p className="eyebrow">Audio2MIDI</p>
           <h1>Ваши транскрипции всегда рядом</h1>
           <p>
-            Откройте кабинет через Telegram — история, подписка и результаты
-            появятся автоматически.
+            Войдите по email, чтобы открыть историю, подписку и результаты
+            с любого устройства.
           </p>
+          <EmailAuthForm onComplete={() => window.location.reload()} />
+          <div className="auth-divider"><span>или</span></div>
           <a className="primary-action" href="https://t.me/Audio2MIDIBot?startapp=cabinet">
             Открыть через Telegram
             <span>→</span>
           </a>
-          <small>Вход по email появится следующим этапом.</small>
+          <small>Telegram остаётся быстрым способом входа, но не обязателен.</small>
         </section>
       </main>
     )
@@ -263,13 +270,13 @@ export default function Dashboard({ initData, colorScheme }: DashboardProps) {
               <span>Музыка становится видимой</span>
             </div>
           </a>
-          <div className="profile-chip">
+          <a className="profile-chip" href="/profile">
             <div className="profile-avatar">{displayName.replace('@', '').slice(0, 1).toUpperCase()}</div>
             <div>
               <strong>{displayName}</strong>
-              <span>Telegram</span>
+              <span>Профиль</span>
             </div>
-          </div>
+          </a>
         </header>
 
         <section className="hero-panel">

@@ -60,7 +60,10 @@ export default function ProjectPage({
           if (!(loadError instanceof ApiError) || loadError.status !== 401 || !initData) {
             throw loadError
           }
-          await authenticateWithTelegram(initData)
+          const authentication = await authenticateWithTelegram(initData)
+          if ('merge_required' in authentication && authentication.merge_required) {
+            throw new ApiError('Сначала объедините аккаунты в профиле.', 409)
+          }
           response = await getProject(projectId)
         }
         if (cancelled) return
