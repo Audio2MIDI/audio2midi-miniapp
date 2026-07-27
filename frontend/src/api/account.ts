@@ -38,11 +38,12 @@ export async function uploadProjectSource(
   file: File,
   requiredHeaders: Record<string, string>,
 ): Promise<void> {
+  const uploadOrigin = new URL(uploadUrl, window.location.origin).origin
   const response = await fetch(uploadUrl, {
     method: 'PUT',
     headers: requiredHeaders,
     body: file,
-    credentials: 'include',
+    credentials: uploadOrigin === window.location.origin ? 'include' : 'omit',
   })
   if (!response.ok) {
     throw new Error(`Не удалось загрузить файл: HTTP ${response.status}`)
