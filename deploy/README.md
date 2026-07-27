@@ -41,6 +41,27 @@ curl -fsS https://app.audio2midi.ru/ | grep -q '/assets/index-'
 Validate a real `?file=` URL without printing its presigned S3 credentials in
 logs or shell history.
 
+## Internal Listening Lab
+
+The internal blind A/B viewer is served from:
+
+```text
+https://app.audio2midi.ru/research/listening
+```
+
+It is intentionally absent from public navigation. Before enabling the route:
+
+1. Create `/etc/nginx/audio2midi-research.htpasswd`.
+2. Create `/etc/nginx/snippets/audio2midi-research-gateway.conf` containing a
+   `proxy_set_header X-Research-Gateway "<random secret>";` directive.
+3. Put the same value in `RESEARCH_GATEWAY_SECRET` for `audio2midi-web-api`.
+4. Set `RESEARCH_ASSET_ROOT` to the read-only gallery export root.
+5. Apply `20260727_research_listening_lab_v1.sql` and import a sanitized
+   listening-gallery manifest.
+
+The ordinary `/api/` route explicitly clears the research gateway headers, so
+public clients cannot turn an account API request into research-admin access.
+
 ## Rollback
 
 Atomically repoint `/opt/audio2midi-web/current` to the previous release,

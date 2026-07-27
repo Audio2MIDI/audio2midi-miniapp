@@ -1,9 +1,14 @@
 import { useTelegram } from './hooks/useTelegram'
 import PianoRoll from './components/PianoRoll'
 import Dashboard from './components/Dashboard'
+import ResearchLab from './components/ResearchLab'
 
 function App() {
   const { isLoading, userId, colorScheme, isDev, initData, midiParam, fileUrl } = useTelegram()
+
+  if (window.location.pathname.startsWith('/research/listening')) {
+    return <ResearchLab />
+  }
 
   if (isLoading) {
     return (

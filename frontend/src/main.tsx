@@ -4,6 +4,7 @@ import '@fontsource-variable/montserrat'
 import App from './App'
 import './styles/global.css'
 import './styles/cabinet.css'
+import './styles/research.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
