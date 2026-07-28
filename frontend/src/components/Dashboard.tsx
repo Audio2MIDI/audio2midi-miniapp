@@ -11,10 +11,12 @@ import {
 import { ApiError } from '../api/client'
 import type { AccountSummary, LibraryItem } from '../api/types'
 import EmailAuthForm from './EmailAuthForm'
+import { telegramLoginUrl } from '../routing'
 
 interface DashboardProps {
   initData: string | null
   colorScheme: 'light' | 'dark'
+  returnPath: string | null
 }
 
 type DashboardState =
@@ -187,7 +189,11 @@ function ResultCard({
   )
 }
 
-export default function Dashboard({ initData, colorScheme }: DashboardProps) {
+export default function Dashboard({
+  initData,
+  colorScheme,
+  returnPath,
+}: DashboardProps) {
   const [state, setState] = useState<DashboardState>({ kind: 'loading' })
 
   useEffect(() => {
@@ -207,6 +213,10 @@ export default function Dashboard({ initData, colorScheme }: DashboardProps) {
             throw new ApiError('Требуется объединить аккаунты в профиле.', 409)
           }
           accountResponse = authentication
+        }
+        if (returnPath) {
+          window.location.replace(returnPath)
+          return
         }
         const [library, editor] = await Promise.all([
           getLibrary(),
@@ -243,7 +253,7 @@ export default function Dashboard({ initData, colorScheme }: DashboardProps) {
     return () => {
       cancelled = true
     }
-  }, [initData])
+  }, [initData, returnPath])
 
   const activeItems = useMemo(
     () => state.kind === 'ready'
@@ -284,9 +294,13 @@ export default function Dashboard({ initData, colorScheme }: DashboardProps) {
             Войдите по email, чтобы открыть историю, подписку и результаты
             с любого устройства.
           </p>
-          <EmailAuthForm onComplete={() => window.location.reload()} />
+          <EmailAuthForm
+            onComplete={() =>
+              window.location.assign(returnPath ?? window.location.pathname)
+            }
+          />
           <div className="auth-divider"><span>или</span></div>
-          <a className="primary-action" href="https://t.me/Audio2MIDIBot?startapp=cabinet">
+          <a className="primary-action" href={telegramLoginUrl(returnPath)}>
             Открыть через Telegram
             <span>→</span>
           </a>

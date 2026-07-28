@@ -6,9 +6,23 @@ import ProjectPage from './components/ProjectPage'
 import Profile from './components/Profile'
 import ResearchLab from './components/ResearchLab'
 import Support from './components/Support'
+import { safeEditorReturnPath } from './routing'
 
 function App() {
-  const { isLoading, userId, colorScheme, isDev, initData, midiParam, fileUrl } = useTelegram()
+  const {
+    isLoading,
+    userId,
+    colorScheme,
+    isDev,
+    initData,
+    midiParam,
+    fileUrl,
+    returnPath: telegramReturnPath,
+  } = useTelegram()
+  const queryReturnPath = safeEditorReturnPath(
+    new URLSearchParams(window.location.search).get('next'),
+  )
+  const returnPath = queryReturnPath ?? telegramReturnPath
 
   if (window.location.pathname.startsWith('/research/listening')) {
     return <ResearchLab />
@@ -56,7 +70,13 @@ function App() {
   }
 
   if (!isVisualizer) {
-    return <Dashboard initData={initData} colorScheme={colorScheme} />
+    return (
+      <Dashboard
+        initData={initData}
+        colorScheme={colorScheme}
+        returnPath={returnPath}
+      />
+    )
   }
 
   return (

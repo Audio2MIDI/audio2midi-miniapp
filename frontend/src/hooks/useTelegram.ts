@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { parseTelegramStartParam } from '../routing'
 
 // Piano Roll доступен всем юзерам
 const ADMIN_IDS: number[] = []  // Пустой = доступ всем
@@ -20,6 +21,7 @@ interface UseTelegramResult {
   initData: string | null
   midiParam: string | null  // MIDI ID from start_param or URL
   fileUrl: string | null    // Direct MIDI file URL (e.g. S3)
+  returnPath: string | null
 }
 
 interface TelegramWebApp {
@@ -50,9 +52,8 @@ function getInitialTelegramState(): TelegramState {
   const urlMidi = params.get('midi')
   const telegramUser = webApp?.initDataUnsafe?.user ?? null
   const startParam = webApp?.initDataUnsafe?.start_param
-  const midiParam = startParam
-    ? (startParam.startsWith('midi_') ? startParam.slice(5) : startParam)
-    : urlMidi
+  const startRoute = parseTelegramStartParam(startParam)
+  const midiParam = startParam ? startRoute.midiParam : urlMidi
 
   if (telegramUser) {
     return {
@@ -66,6 +67,7 @@ function getInitialTelegramState(): TelegramState {
       initData: webApp?.initData ?? null,
       midiParam,
       fileUrl,
+      returnPath: startRoute.returnPath,
     }
   }
 
@@ -81,6 +83,7 @@ function getInitialTelegramState(): TelegramState {
       initData: webApp?.initData ?? null,
       midiParam,
       fileUrl,
+      returnPath: startRoute.returnPath,
     }
   }
 
@@ -96,6 +99,7 @@ function getInitialTelegramState(): TelegramState {
     initData: webApp?.initData ?? null,
     midiParam,
     fileUrl,
+    returnPath: startRoute.returnPath,
   }
 }
 
