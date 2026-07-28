@@ -6,6 +6,7 @@ import ProjectPage from './components/ProjectPage'
 import Profile from './components/Profile'
 import ResearchLab from './components/ResearchLab'
 import Support from './components/Support'
+import ReelsStudio from './components/ReelsStudio'
 import { safeEditorReturnPath } from './routing'
 
 function App() {
@@ -30,6 +31,18 @@ function App() {
 
   if (window.location.pathname === '/support') {
     return <Support colorScheme={colorScheme} />
+  }
+
+  const reelsMatch = window.location.pathname.match(
+    /^\/internal\/reels(?:\/([0-9a-f-]+))?$/i,
+  )
+  if (reelsMatch) {
+    return (
+      <ReelsStudio
+        candidateId={reelsMatch[1]}
+        colorScheme={colorScheme}
+      />
+    )
   }
 
   if (isLoading) {
