@@ -8,7 +8,12 @@ import {
   uploadProjectSource,
 } from '../api/account'
 import { ApiError } from '../api/client'
+import {
+  currentCampaignCode,
+  recordCampaignEvent,
+} from '../api/reels'
 import type { AccountSummary } from '../api/types'
+import EmailAuthForm from './EmailAuthForm'
 
 interface NewProjectProps {
   initData: string | null
@@ -91,6 +96,7 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
   const [progress, setProgress] = useState('')
   const [error, setError] = useState('')
   const [dragging, setDragging] = useState(false)
+  const [authNonce, setAuthNonce] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -124,7 +130,11 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
     return () => {
       cancelled = true
     }
-  }, [initData])
+  }, [authNonce, initData])
+
+  useEffect(() => {
+    currentCampaignCode()
+  }, [])
 
   const effectiveTitle = useMemo(
     () => title.trim() || file?.name.replace(/\.[^.]+$/, '') || '',
@@ -155,6 +165,10 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
     }
     setError('')
     try {
+      await recordCampaignEvent('upload_started', {
+        engine,
+        size_bytes: file.size,
+      }).catch(() => undefined)
       setProgress('Проверяем файл…')
       const digest = await sha256(file)
       setProgress('Загружаем аудио в защищённое хранилище…')
@@ -172,6 +186,10 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
       )
       setProgress('Ставим задачу в очередь…')
       await submitProject(upload.project.id, engine)
+      await recordCampaignEvent('upload_completed', {
+        engine,
+        project_id: upload.project.id,
+      }).catch(() => undefined)
       window.location.assign(`/tracks/${upload.project.id}`)
     } catch (submitError) {
       if (submitError instanceof ApiError && submitError.status === 402) {
@@ -193,9 +211,17 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
       <main className="cabinet-shell studio-centered" data-theme={colorScheme}>
         <section className="studio-message">
           <p className="eyebrow">Audio2MIDI Studio</p>
-          <h1>Войдите через Telegram</h1>
-          <p>После входа проекты и подписка автоматически привяжутся к вашему аккаунту.</p>
-          <a className="primary-action" href="https://t.me/Audio2MIDIBot?startapp=cabinet">Открыть Telegram</a>
+          <h1>Войдите, чтобы загрузить песню</h1>
+          <p>Получите код по email. Telegram остаётся быстрым дополнительным способом входа.</p>
+          <EmailAuthForm
+            onComplete={() => {
+              void recordCampaignEvent('signup').catch(() => undefined)
+              setPage({ kind: 'loading' })
+              setAuthNonce((value) => value + 1)
+            }}
+          />
+          <div className="auth-method-divider"><span>или</span></div>
+          <a className="secondary-text-action" href="https://t.me/Audio2MIDIBot?startapp=cabinet">Открыть через Telegram</a>
         </section>
       </main>
     )
