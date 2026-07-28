@@ -369,6 +369,8 @@
   border: 1px solid var(--cabinet-border);
   color: #d4d4d8;
   background: rgba(255, 255, 255, 0.025);
+  cursor: pointer;
+  font-family: inherit;
 }
 
 .cabinet-shell .artifact-button:hover {
@@ -381,6 +383,17 @@
   border-color: rgba(147, 197, 253, 0.32);
   color: #dbeafe;
   background: rgba(29, 78, 216, 0.12);
+}
+
+.cabinet-shell .artifact-button--editor {
+  border-color: rgba(134, 239, 172, 0.24);
+  color: #dcfce7;
+  background: rgba(22, 163, 74, 0.09);
+}
+
+.cabinet-shell .artifact-button:disabled {
+  cursor: wait;
+  opacity: 0.62;
 }
 
 .cabinet-shell .empty-library {

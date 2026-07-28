@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 import {
   authenticateWithTelegram,
+  getEditorCapabilities,
   getProject,
 } from '../api/account'
 import { ApiError } from '../api/client'
@@ -46,6 +47,7 @@ export default function ProjectPage({
   colorScheme,
 }: ProjectPageProps) {
   const [project, setProject] = useState<ProjectDetail | null>(null)
+  const [editorEnabled, setEditorEnabled] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -68,6 +70,10 @@ export default function ProjectPage({
         }
         if (cancelled) return
         setProject(response.project)
+        const capabilities = await getEditorCapabilities().catch(() => null)
+        if (!cancelled) {
+          setEditorEnabled(Boolean(capabilities?.enabled))
+        }
         setError('')
         if (['queued', 'processing'].includes(response.project.status)) {
           timer = window.setTimeout(() => void load(), 4000)
@@ -118,7 +124,7 @@ export default function ProjectPage({
           <div>
             <p className="eyebrow">Композиция</p>
             <h1>{project.title}</h1>
-            <p>{project.source_filename}</p>
+            <p>{project.source_filename || 'MIDI из истории Audio2MIDI'}</p>
           </div>
           <span className={`project-status project-status--${project.status}`}>
             {['queued', 'processing'].includes(project.status) && <i />}
@@ -156,12 +162,27 @@ export default function ProjectPage({
                 <div className="workspace-roll" aria-hidden="true">
                   <span /><span /><span /><span /><span />
                 </div>
-                {midi && <a className="primary-action" href={visualizerUrl(midi.download_url)}>Открыть визуализацию →</a>}
+                {midi && (
+                  <div className="workspace-actions">
+                    <a className="primary-action" href={visualizerUrl(midi.download_url)}>
+                      Смотреть →
+                    </a>
+                    {editorEnabled && (
+                      <a className="secondary-action" href={`/editor/${project.id}`}>
+                        Редактировать
+                      </a>
+                    )}
+                  </div>
+                )}
               </article>
               <article className="workspace-card">
                 <p className="eyebrow">Версия</p>
                 <h2>{latest?.version_label ?? 'Исходная генерация'}</h2>
-                <p>Редактирование и сохранение новых версий подключим следующим этапом.</p>
+                <p>
+                  {editorEnabled
+                    ? 'Изменения сохраняются как новая версия — исходник останется доступен.'
+                    : 'Редактор сейчас включается по закрытому beta-списку.'}
+                </p>
                 <span className="workspace-version">v{project.versions.length}</span>
               </article>
             </section>
