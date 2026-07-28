@@ -478,12 +478,43 @@
   line-height: 1.05;
 }
 
-.workspace-card .primary-action {
+.workspace-actions {
   position: absolute;
   z-index: 3;
   right: 40px;
   bottom: 32px;
   left: 40px;
+  display: flex;
+  gap: 10px;
+}
+
+.workspace-actions .primary-action,
+.workspace-actions .secondary-action {
+  display: inline-flex;
+  width: auto;
+  min-height: 46px;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding: 0 18px;
+  border-radius: 8px;
+  text-decoration: none;
+}
+
+.workspace-actions .secondary-action {
+  border: 1px solid rgba(134, 239, 172, 0.26);
+  color: #dcfce7;
+  background: rgba(22, 163, 74, 0.09);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.workspace-actions .secondary-action:hover {
+  border-color: rgba(134, 239, 172, 0.52);
+  background: rgba(22, 163, 74, 0.16);
+}
+
+.workspace-card .primary-action {
   width: auto;
 }
 
@@ -655,9 +686,10 @@
     flex-direction: column;
   }
 
-  .workspace-card .primary-action {
+  .workspace-actions {
     right: 24px;
     left: 24px;
+    flex-direction: column;
   }
 
   .audio-result {

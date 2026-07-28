@@ -3,7 +3,9 @@ import type {
   AccountResponse,
   AuthenticationResponse,
   AuthCapabilities,
+  EditorCapabilities,
   LibraryResponse,
+  MaterializedProjectResponse,
   ProfileResponse,
   ProjectDetailResponse,
   ProjectSubmitResponse,
@@ -40,6 +42,18 @@ export async function getCurrentAccount(): Promise<AccountResponse> {
 
 export async function getLibrary(limit = 50): Promise<LibraryResponse> {
   return get<LibraryResponse>('/v1/me/library', { limit })
+}
+
+export async function getEditorCapabilities(): Promise<EditorCapabilities> {
+  return get<EditorCapabilities>('/v1/me/editor/capabilities')
+}
+
+export async function materializeEditorProject(
+  itemId: string,
+): Promise<MaterializedProjectResponse> {
+  return post<MaterializedProjectResponse>(
+    `/v1/me/library/${encodeURIComponent(itemId)}/materialize-project`,
+  )
 }
 
 export async function logout(): Promise<void> {

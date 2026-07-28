@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 
 import {
   authenticateWithTelegram,
+  getEditorCapabilities,
   getCurrentAccount,
   getLibrary,
   logout,
+  materializeEditorProject,
 } from '../api/account'
 import { ApiError } from '../api/client'
 import type { AccountSummary, LibraryItem } from '../api/types'
@@ -18,7 +20,12 @@ interface DashboardProps {
 type DashboardState =
   | { kind: 'loading' }
   | { kind: 'signed-out' }
-  | { kind: 'ready'; account: AccountSummary; items: LibraryItem[] }
+  | {
+      kind: 'ready'
+      account: AccountSummary
+      items: LibraryItem[]
+      editorEnabled: boolean
+    }
   | { kind: 'error'; message: string }
 
 const METHOD_NAMES: Record<string, string> = {
@@ -79,12 +86,41 @@ function subscriptionLabel(account: AccountSummary): string {
 
 function visualizerUrl(downloadUrl: string): string {
   const absoluteDownload = new URL(downloadUrl, window.location.origin).toString()
-  return `/?file=${encodeURIComponent(absoluteDownload)}`
+  return `/visualizer?file=${encodeURIComponent(absoluteDownload)}`
 }
 
-function ResultCard({ item }: { item: LibraryItem }) {
+function ResultCard({
+  item,
+  editorEnabled,
+}: {
+  item: LibraryItem
+  editorEnabled: boolean
+}) {
   const midi = item.artifacts.find((artifact) => artifact.role === 'midi')
   const isActive = ['queued', 'leased', 'running'].includes(item.status)
+  const [openingEditor, setOpeningEditor] = useState(false)
+  const [editorError, setEditorError] = useState('')
+
+  async function openEditor() {
+    if (!midi || openingEditor) return
+    setOpeningEditor(true)
+    setEditorError('')
+    try {
+      if (item.project_id) {
+        window.location.assign(`/editor/${item.project_id}`)
+        return
+      }
+      const materialized = await materializeEditorProject(item.id)
+      window.location.assign(materialized.editor_url)
+    } catch (error) {
+      setEditorError(
+        error instanceof ApiError && error.status === 403
+          ? 'Редактор пока доступен только участникам beta.'
+          : 'Не удалось открыть редактор. Попробуйте ещё раз.',
+      )
+      setOpeningEditor(false)
+    }
+  }
 
   return (
     <article className="result-card">
@@ -118,9 +154,20 @@ function ResultCard({ item }: { item: LibraryItem }) {
         <div className="artifact-row">
           {midi && (
             <a className="artifact-button artifact-button--primary" href={visualizerUrl(midi.download_url)}>
-              <span>▤</span>
-              Piano Roll
+              <span>▶</span>
+              Смотреть
             </a>
+          )}
+          {midi && editorEnabled && (
+            <button
+              className="artifact-button artifact-button--editor"
+              disabled={openingEditor}
+              onClick={() => void openEditor()}
+              type="button"
+            >
+              <span>✎</span>
+              {openingEditor ? 'Открываем…' : 'Редактировать'}
+            </button>
           )}
           {item.artifacts.map((artifact) => (
             <a
@@ -135,6 +182,7 @@ function ResultCard({ item }: { item: LibraryItem }) {
           ))}
         </div>
       )}
+      {editorError && <p className="result-error">{editorError}</p>}
     </article>
   )
 }
@@ -160,12 +208,22 @@ export default function Dashboard({ initData, colorScheme }: DashboardProps) {
           }
           accountResponse = authentication
         }
-        const library = await getLibrary()
+        const [library, editor] = await Promise.all([
+          getLibrary(),
+          getEditorCapabilities().catch(() => ({
+            enabled: false,
+            rollout: 'off' as const,
+            can_edit_owned_results: false,
+            requires_active_subscription: false,
+            max_midi_bytes: 0,
+          })),
+        ])
         if (!cancelled) {
           setState({
             kind: 'ready',
             account: accountResponse.account,
             items: library.items,
+            editorEnabled: editor.enabled,
           })
         }
       } catch (error) {
@@ -256,7 +314,7 @@ export default function Dashboard({ initData, colorScheme }: DashboardProps) {
     )
   }
 
-  const { account } = state
+  const { account, editorEnabled } = state
   const displayName = account.username ? `@${account.username}` : 'Ваш аккаунт'
 
   return (
@@ -337,7 +395,13 @@ export default function Dashboard({ initData, colorScheme }: DashboardProps) {
               </div>
             </div>
             <div className="result-list">
-              {activeItems.map((item) => <ResultCard item={item} key={item.id} />)}
+              {activeItems.map((item) => (
+                <ResultCard
+                  editorEnabled={editorEnabled}
+                  item={item}
+                  key={item.id}
+                />
+              ))}
             </div>
           </section>
         )}
@@ -352,7 +416,13 @@ export default function Dashboard({ initData, colorScheme }: DashboardProps) {
           </div>
           {historyItems.length ? (
             <div className="result-list">
-              {historyItems.map((item) => <ResultCard item={item} key={item.id} />)}
+              {historyItems.map((item) => (
+                <ResultCard
+                  editorEnabled={editorEnabled}
+                  item={item}
+                  key={item.id}
+                />
+              ))}
             </div>
           ) : (
             <div className="empty-library">

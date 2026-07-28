@@ -152,6 +152,20 @@ export interface LibraryResponse {
   items: LibraryItem[];
 }
 
+export interface EditorCapabilities {
+  enabled: boolean;
+  rollout: 'off' | 'allowlist' | 'all';
+  can_edit_owned_results: boolean;
+  requires_active_subscription: boolean;
+  max_midi_bytes: number;
+}
+
+export interface MaterializedProjectResponse {
+  created: boolean;
+  project_id: string;
+  editor_url: string;
+}
+
 export interface ProjectUploadResponse {
   project: {
     id: string;
@@ -194,9 +208,9 @@ export interface ProjectDetail {
   id: string;
   title: string;
   status: string;
-  source_filename: string;
-  source_size_bytes: number;
-  source_mime_type: string;
+  source_filename: string | null;
+  source_size_bytes: number | null;
+  source_mime_type: string | null;
   created_at: string;
   versions: ProjectVersion[];
 }
