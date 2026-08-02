@@ -18,6 +18,8 @@ export interface ResearchSample {
   audio_url: string
   midi_url: string
   piano_roll_url: string | null
+  pdf_url: string | null
+  musicxml_url: string | null
 }
 
 export interface ResearchTrack {
@@ -57,6 +59,8 @@ export interface ResearchConditionResult {
   losses: number
   ties: number
   both_bad: number
+  ratings?: Record<string, number>
+  rating_counts?: Record<string, number>
 }
 
 export interface ResearchPairResult {
@@ -84,7 +88,10 @@ export interface ResearchVote {
   right_sample_id: string
   choice: 'left' | 'right' | 'tie' | 'both_bad'
   tags: string[]
-  ratings: Record<string, number>
+  ratings: {
+    left: Record<string, number>
+    right: Record<string, number>
+  }
   comment: string
   response_ms: number
 }
@@ -146,6 +153,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
             audio_url: 'data:audio/wav;base64,',
             midi_url: '#',
             piano_roll_url: null,
+            pdf_url: null,
+            musicxml_url: null,
           },
           right: {
             id: '00000000-0000-0000-0000-000000000002',
@@ -153,6 +162,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
             audio_url: 'data:audio/wav;base64,',
             midi_url: '#',
             piano_roll_url: null,
+            pdf_url: null,
+            musicxml_url: null,
           },
         },
         progress: { completed: mockCompleted, total: 9 },

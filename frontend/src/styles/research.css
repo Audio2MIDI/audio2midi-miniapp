@@ -354,6 +354,28 @@
   text-decoration: none;
 }
 
+.research-downloads {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.research-downloads .research-download {
+  margin-top: 0;
+}
+
+.research-downloads button {
+  padding: 0;
+  border: 0;
+  color: #b6c9ff;
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
 .research-review {
   margin-top: 18px;
   padding: clamp(28px, 4vw, 48px);
@@ -431,6 +453,54 @@
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 16px;
+}
+
+.research-ratings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.research-ratings fieldset {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+}
+
+.research-ratings legend {
+  padding: 0 6px;
+  color: var(--research-text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.research-ratings label {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+}
+
+.research-ratings span {
+  color: #b8b8bf;
+  font-size: 11px;
+}
+
+.research-ratings select {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9px;
+  color: var(--research-text);
+  background: #16161a;
+  font: inherit;
+  font-size: 11px;
 }
 
 .research-tags button {
@@ -568,6 +638,20 @@
   width: 100%;
   min-width: 900px;
   border-radius: 10px;
+}
+
+.research-lightbox__content--pdf {
+  width: min(1180px, 100%);
+  height: calc(100vh - 56px);
+  overflow: hidden;
+}
+
+.research-lightbox__content--pdf iframe {
+  width: 100%;
+  height: calc(100% - 42px);
+  border: 0;
+  border-radius: 10px;
+  background: #fff;
 }
 
 .research-results {
@@ -714,6 +798,10 @@
 
   .research-votes {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .research-ratings {
+    grid-template-columns: 1fr;
   }
 
   .research-results__summary {
