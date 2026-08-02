@@ -160,7 +160,7 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
   async function startProcessing() {
     if (!file || page.kind !== 'ready') return
     if (!hasSubscription(page.account)) {
-      setError('Для обработки на сайте нужна активная подписка. Управление оплатой добавим следующим этапом.')
+      setError('Для обработки нужна активная подписка. Её можно оформить прямо на сайте.')
       return
     }
     setError('')
@@ -193,7 +193,7 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
       window.location.assign(`/tracks/${upload.project.id}`)
     } catch (submitError) {
       if (submitError instanceof ApiError && submitError.status === 402) {
-        setError('Подписка не активна. Пока оформить её можно через Telegram-бота.')
+        setError('Подписка не активна. Оформите её на сайте и повторите загрузку.')
       } else {
         setError(submitError instanceof Error
           ? submitError.message
@@ -243,6 +243,17 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
           <h1>Превратим аудио<br />в рабочий материал.</h1>
           <p>Загрузите композицию и выберите, какой результат нужен.</p>
         </section>
+
+        {!hasSubscription(page.account) && (
+          <section className="studio-subscription-notice">
+            <div>
+              <span>Подписка не активна</span>
+              <strong>Оформите доступ без Telegram</strong>
+              <p>После оплаты вернитесь сюда и загрузите композицию — Telegram не понадобится.</p>
+            </div>
+            <a className="primary-action" href="/billing">Выбрать тариф →</a>
+          </section>
+        )}
 
         <div className="studio-grid">
           <section className="studio-panel">
@@ -309,14 +320,20 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
             <strong>{effectiveTitle || 'Новая композиция'}</strong>
             <span>{file ? METHODS.find((method) => method.id === engine)?.name : 'Сначала выберите аудиофайл'}</span>
           </div>
-          <button
-            className="primary-action studio-submit__button"
-            type="button"
-            disabled={!file || Boolean(progress)}
-            onClick={() => void startProcessing()}
-          >
-            {progress || 'Начать обработку →'}
-          </button>
+          {hasSubscription(page.account) ? (
+            <button
+              className="primary-action studio-submit__button"
+              type="button"
+              disabled={!file || Boolean(progress)}
+              onClick={() => void startProcessing()}
+            >
+              {progress || 'Начать обработку →'}
+            </button>
+          ) : (
+            <a className="primary-action studio-submit__button" href="/billing">
+              Оформить подписку →
+            </a>
+          )}
         </section>
         {error && <p className="studio-error">{error}</p>}
       </div>

@@ -87,8 +87,9 @@ export async function get<T>(
 export async function post<T>(
   path: string,
   body?: Record<string, unknown> | FormData,
+  options?: { headers?: HeadersInit },
 ): Promise<T> {
-  const headers = buildHeaders();
+  const headers = buildHeaders(options?.headers);
   let fetchBody: BodyInit | undefined;
 
   if (body instanceof FormData) {
