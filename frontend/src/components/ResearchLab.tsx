@@ -32,10 +32,32 @@ const TAGS: Array<{ id: string; label: string }> = [
   { id: 'no_breathing', label: 'нет музыкального дыхания' },
   { id: 'broken_structure', label: 'сломана структура' },
   { id: 'render_problem', label: 'проблема только в рендере' },
+  { id: 'wrong_rhythm', label: 'неверный ритм' },
+  { id: 'wrong_bars', label: 'неправильные такты' },
+  { id: 'bad_durations', label: 'плохие длительности' },
+  { id: 'extra_rests', label: 'лишние паузы' },
+  { id: 'bad_hand_split', label: 'плохое разделение рук' },
+  { id: 'unreadable_polyphony', label: 'нечитаемая полифония' },
+  { id: 'wrong_key_signature', label: 'неверные знаки' },
+  { id: 'cropped_notation', label: 'обрезана партитура' },
+  { id: 'bad_layout', label: 'плохая вёрстка' },
+]
+
+const RATINGS: Array<{ id: string; label: string }> = [
+  { id: 'similarity', label: 'Сходство с оригиналом' },
+  { id: 'readability', label: 'Читаемость нот' },
+  { id: 'playability', label: 'Играбельность' },
+  { id: 'layout_quality', label: 'Качество вёрстки' },
 ]
 
 type View = 'compare' | 'results'
 type LoadState = 'loading' | 'ready' | 'submitting' | 'error'
+type VariantSide = 'left' | 'right'
+type VariantRatings = Record<VariantSide, Record<string, number>>
+
+function emptyRatings(): VariantRatings {
+  return { left: {}, right: {} }
+}
 
 function sessionId(): string {
   const storageKey = 'audio2midi-research-session'
@@ -50,10 +72,12 @@ function ResearchPlayer({
   sample,
   onPlay,
   onOpenPianoRoll,
+  onOpenPdf,
 }: {
   sample: ResearchSample
   onPlay: (element: HTMLAudioElement) => void
   onOpenPianoRoll: (sample: ResearchSample) => void
+  onOpenPdf: (sample: ResearchSample) => void
 }) {
   return (
     <article className="research-variant">
@@ -85,9 +109,17 @@ function ResearchPlayer({
           </button>
         </div>
       )}
-      <a className="research-download" href={sample.midi_url}>
-        Скачать MIDI
-      </a>
+      <div className="research-downloads">
+        <a className="research-download" href={sample.midi_url}>MIDI</a>
+        {sample.musicxml_url && (
+          <a className="research-download" href={sample.musicxml_url}>MusicXML</a>
+        )}
+        {sample.pdf_url && (
+          <button type="button" onClick={() => onOpenPdf(sample)}>
+            Открыть PDF ↗
+          </button>
+        )}
+      </div>
     </article>
   )
 }
@@ -113,6 +145,8 @@ function ResultsView({ results }: { results: ResearchResults }) {
               <th>Поражения</th>
               <th>Ничьи</th>
               <th>Оба плохие</th>
+              <th>Читаемость</th>
+              <th>Вёрстка</th>
             </tr>
           </thead>
           <tbody>
@@ -123,6 +157,8 @@ function ResultsView({ results }: { results: ResearchResults }) {
                 <td>{value.losses}</td>
                 <td>{value.ties}</td>
                 <td>{value.both_bad}</td>
+                <td>{value.ratings?.readability?.toFixed(2) ?? '—'}</td>
+                <td>{value.ratings?.layout_quality?.toFixed(2) ?? '—'}</td>
               </tr>
             ))}
           </tbody>
@@ -156,11 +192,13 @@ export default function ResearchLab() {
   })
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [comment, setComment] = useState('')
+  const [ratings, setRatings] = useState<VariantRatings>(emptyRatings)
   const [state, setState] = useState<LoadState>('loading')
   const [error, setError] = useState('')
   const [view, setView] = useState<View>('compare')
   const [results, setResults] = useState<ResearchResults | null>(null)
   const [expandedPianoRoll, setExpandedPianoRoll] = useState<ResearchSample | null>(null)
+  const [expandedPdf, setExpandedPdf] = useState<ResearchSample | null>(null)
   const startedAt = useRef(0)
   const activeAudio = useRef<HTMLAudioElement | null>(null)
 
@@ -183,6 +221,7 @@ export default function ResearchLab() {
       setExperimentProgress(payload.experiment_progress)
       setSelectedTags([])
       setComment('')
+      setRatings(emptyRatings())
       startedAt.current = performance.now()
       setState('ready')
     } catch (loadError) {
@@ -246,7 +285,7 @@ export default function ResearchLab() {
         right_sample_id: comparison.right.id,
         choice,
         tags: selectedTags,
-        ratings: {},
+        ratings,
         comment,
         response_ms: Math.max(0, Math.round(performance.now() - startedAt.current)),
       })
@@ -257,7 +296,7 @@ export default function ResearchLab() {
       setError(voteError instanceof Error ? voteError.message : 'Не удалось сохранить оценку')
       setState('ready')
     }
-  }, [comment, comparison, loadNext, refreshTracks, selectedTags, state])
+  }, [comment, comparison, loadNext, ratings, refreshTracks, selectedTags, state])
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -284,13 +323,16 @@ export default function ResearchLab() {
   }, [comparison, view, vote])
 
   useEffect(() => {
-    if (!expandedPianoRoll) return
+    if (!expandedPianoRoll && !expandedPdf) return
     function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === 'Escape') setExpandedPianoRoll(null)
+      if (event.key === 'Escape') {
+        setExpandedPianoRoll(null)
+        setExpandedPdf(null)
+      }
     }
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [expandedPianoRoll])
+  }, [expandedPdf, expandedPianoRoll])
 
   async function selectTrack(nextTrackId: string) {
     if (!experimentId || nextTrackId === trackId) return
@@ -464,11 +506,13 @@ export default function ResearchLab() {
                 sample={comparison.left}
                 onPlay={pauseOtherPlayers}
                 onOpenPianoRoll={setExpandedPianoRoll}
+                onOpenPdf={setExpandedPdf}
               />
               <ResearchPlayer
                 sample={comparison.right}
                 onPlay={pauseOtherPlayers}
                 onOpenPianoRoll={setExpandedPianoRoll}
+                onOpenPdf={setExpandedPdf}
               />
             </section>
 
@@ -498,6 +542,35 @@ export default function ResearchLab() {
 
               <details className="research-details">
                 <summary>Что именно не так?</summary>
+                <div className="research-ratings">
+                  {(['left', 'right'] as const).map((side) => (
+                    <fieldset key={side}>
+                      <legend>Вариант {side === 'left' ? 'A' : 'B'}</legend>
+                      {RATINGS.map((rating) => (
+                        <label key={rating.id}>
+                          <span>{rating.label}</span>
+                          <select
+                            value={ratings[side][rating.id] ?? ''}
+                            onChange={(event) => {
+                              const value = Number(event.target.value)
+                              setRatings((current) => {
+                                const nextSide = { ...current[side] }
+                                if (value) nextSide[rating.id] = value
+                                else delete nextSide[rating.id]
+                                return { ...current, [side]: nextSide }
+                              })
+                            }}
+                          >
+                            <option value="">Не оценено</option>
+                            {[1, 2, 3, 4, 5].map((value) => (
+                              <option value={value} key={value}>{value} / 5</option>
+                            ))}
+                          </select>
+                        </label>
+                      ))}
+                    </fieldset>
+                  ))}
+                </div>
                 <div className="research-tags">
                   {TAGS.map((tag) => (
                     <button
@@ -546,6 +619,31 @@ export default function ResearchLab() {
             <img
               src={expandedPianoRoll.piano_roll_url}
               alt={`Piano roll варианта ${expandedPianoRoll.label}`}
+            />
+          </div>
+        </div>
+      )}
+      {expandedPdf?.pdf_url && (
+        <div
+          className="research-lightbox"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`PDF варианта ${expandedPdf.label}`}
+          onClick={() => setExpandedPdf(null)}
+        >
+          <div
+            className="research-lightbox__content research-lightbox__content--pdf"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div>
+              <span>Партитура · вариант {expandedPdf.label}</span>
+              <button type="button" onClick={() => setExpandedPdf(null)}>
+                Закрыть ×
+              </button>
+            </div>
+            <iframe
+              src={`${expandedPdf.pdf_url}#view=FitH`}
+              title={`Партитура варианта ${expandedPdf.label}`}
             />
           </div>
         </div>
