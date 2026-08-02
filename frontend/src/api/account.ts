@@ -3,6 +3,9 @@ import type {
   AccountResponse,
   AuthenticationResponse,
   AuthCapabilities,
+  BillingCheckoutResponse,
+  BillingPaymentResponse,
+  BillingPlansResponse,
   EditorCapabilities,
   LibraryResponse,
   MaterializedProjectResponse,
@@ -11,6 +14,7 @@ import type {
   ProjectSubmitResponse,
   ProjectUploadResponse,
   SessionsResponse,
+  SubscriptionPeriod,
 } from './types'
 
 export async function authenticateWithTelegram(initData: string): Promise<AuthenticationResponse> {
@@ -85,6 +89,29 @@ export async function revokeOtherSessions(): Promise<{ revoked: number }> {
 
 export async function disableAutoRenew(): Promise<void> {
   await post('/v1/me/subscription/auto-renew/disable')
+}
+
+export async function getBillingPlans(): Promise<BillingPlansResponse> {
+  return get<BillingPlansResponse>('/v1/me/billing/plans')
+}
+
+export async function createBillingCheckout(
+  period: SubscriptionPeriod,
+  idempotencyKey: string,
+): Promise<BillingCheckoutResponse> {
+  return post<BillingCheckoutResponse>(
+    '/v1/me/billing/checkout',
+    { period, recurring_consent: true },
+    { headers: { 'Idempotency-Key': idempotencyKey } },
+  )
+}
+
+export async function getBillingPayment(
+  intentId: string,
+): Promise<BillingPaymentResponse> {
+  return get<BillingPaymentResponse>(
+    `/v1/me/billing/payments/${encodeURIComponent(intentId)}`,
+  )
 }
 
 export async function createProjectUpload(input: {

@@ -135,6 +135,10 @@ export default function Profile({ initData, colorScheme }: ProfileProps) {
   const emailIdentity = state.profile.identities.find(
     (identity) => identity.provider === 'supabase',
   )
+  const subscriptionActive = Boolean(
+    state.account.subscription_until
+      && new Date(state.account.subscription_until).getTime() > Date.now(),
+  )
 
   return (
     <main className="cabinet-shell" data-theme={colorScheme}>
@@ -224,11 +228,16 @@ export default function Profile({ initData, colorScheme }: ProfileProps) {
             <span className="profile-card__number">03</span>
             <h2>Подписка</h2>
             <p className="profile-card__copy">
-              {state.account.subscription_until
+              {subscriptionActive && state.account.subscription_until
                 ? `Доступ оплачен до ${formatDate(state.account.subscription_until)}.`
                 : 'Активной подписки нет.'}
             </p>
-            {state.account.auto_renew ? (
+            {!subscriptionActive && (
+              <a className="profile-button" href="/billing">
+                Оформить подписку на сайте
+              </a>
+            )}
+            {subscriptionActive && state.account.auto_renew ? (
               <button
                 className="profile-button profile-button--danger"
                 disabled={busy}
@@ -246,9 +255,9 @@ export default function Profile({ initData, colorScheme }: ProfileProps) {
               >
                 Отключить автопродление
               </button>
-            ) : (
+            ) : subscriptionActive ? (
               <span className="profile-status">Автопродление выключено</span>
-            )}
+            ) : null}
             <a className="profile-card__link" href="/support">Возврат и поддержка →</a>
           </section>
 

@@ -7,6 +7,8 @@ import Profile from './components/Profile'
 import ResearchLab from './components/ResearchLab'
 import Support from './components/Support'
 import ReelsStudio from './components/ReelsStudio'
+import Billing from './components/Billing'
+import PaymentReturn from './components/PaymentReturn'
 import { safeEditorReturnPath } from './routing'
 
 function App() {
@@ -31,6 +33,19 @@ function App() {
 
   if (window.location.pathname === '/support') {
     return <Support colorScheme={colorScheme} />
+  }
+
+  if (window.location.pathname === '/billing') {
+    return <Billing colorScheme={colorScheme} />
+  }
+
+  if (window.location.pathname === '/payment/return') {
+    return (
+      <PaymentReturn
+        colorScheme={colorScheme}
+        intentId={new URLSearchParams(window.location.search).get('intent')}
+      />
+    )
   }
 
   const reelsMatch = window.location.pathname.match(

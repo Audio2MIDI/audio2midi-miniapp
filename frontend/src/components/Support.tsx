@@ -19,8 +19,8 @@ export default function Support({ colorScheme }: SupportProps) {
           <p className="eyebrow">Помощь</p>
           <h1>Подписка, отмена и возвраты</h1>
           <p>
-            Сейчас подписка оформляется в Telegram-боте. На сайте оплата пока
-            недоступна.
+            Подписку можно оформить и отменить прямо на сайте. Telegram для
+            оплаты и получения результата не требуется.
           </p>
         </section>
 
@@ -30,16 +30,15 @@ export default function Support({ colorScheme }: SupportProps) {
             <h2>Как отменить подписку</h2>
             <ol>
               <li>
-                Откройте <a href="https://t.me/Audio2MIDIBot">@Audio2MIDIBot</a>.
+                Откройте <a href="/profile">профиль на сайте</a>.
               </li>
-              <li>Перейдите в «Меню» → «Оплата».</li>
-              <li>
-                Выберите «Управление подпиской» → «Отключить автопродление».
-              </li>
+              <li>В разделе «Подписка» нажмите «Отключить автопродление».</li>
             </ol>
             <p className="support-note">
               После отмены новые списания не производятся. Доступ сохраняется
-              до конца уже оплаченного периода.
+              до конца уже оплаченного периода. Если подписка оформлена в
+              Telegram, её также можно отменить через «Меню» → «Оплата» →
+              «Управление подпиской».
             </p>
           </section>
 
@@ -48,8 +47,8 @@ export default function Support({ colorScheme }: SupportProps) {
             <h2>Возврат или вопрос по оплате</h2>
             <p>
               Напишите нам в Telegram или по электронной почте. Укажите ваш
-              Telegram username и примерную дату платежа — так мы быстрее
-              найдём операцию.
+              email аккаунта, сумму и примерную дату платежа — так мы быстрее
+              найдём операцию. Необязательно иметь Telegram.
             </p>
             <div className="support-actions">
               <a className="primary-action" href="https://t.me/vosatorp">
@@ -63,11 +62,26 @@ export default function Support({ colorScheme }: SupportProps) {
               Не присылайте номер карты, срок действия или код из SMS.
             </p>
           </section>
+
+          <section className="support-card support-card--wide">
+            <p className="support-card__number">03</p>
+            <h2>Как работает продление</h2>
+            <p>
+              Перед оплатой вы выбираете тариф и отдельно подтверждаете сумму и
+              периодичность списаний. Чекбокс согласия не установлен заранее.
+              Подписка продлевается по выбранному интервалу, пока вы её не
+              отмените. Цена и следующий период показаны рядом с кнопкой оплаты.
+            </p>
+            <p className="support-note">
+              Платёж обрабатывает Т‑Банк. Audio2MIDI не получает и не хранит
+              номер карты, срок действия или код подтверждения.
+            </p>
+          </section>
         </div>
 
         <footer className="support-footer">
           <span>Audio2MIDI · 2026</span>
-          <a href="https://t.me/Audio2MIDIBot">Открыть Telegram-бот</a>
+          <a href="/billing">Выбрать подписку</a>
         </footer>
       </div>
     </main>

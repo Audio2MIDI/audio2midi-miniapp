@@ -125,6 +125,47 @@ export interface SessionsResponse {
   sessions: WebSession[];
 }
 
+export type SubscriptionPeriod = 'day' | 'week' | 'month' | 'year';
+
+export interface BillingPlan {
+  period: SubscriptionPeriod;
+  title: string;
+  days: number;
+  price_rub: number;
+  cadence: string;
+}
+
+export interface BillingPlansResponse {
+  enabled: boolean;
+  currency: 'RUB';
+  consent_version: string;
+  plans: BillingPlan[];
+}
+
+export interface WebPaymentIntent {
+  id: string;
+  period: SubscriptionPeriod;
+  amount_kopek: number;
+  status: 'initializing' | 'ready' | 'processing' | 'paid' | 'failed' | 'cancelled';
+  provider_status: string | null;
+  provider_success: boolean | null;
+  access_until: string | null;
+  auto_renew: boolean | null;
+  sanitized_error: string | null;
+  created_at: string;
+  fulfilled_at: string | null;
+}
+
+export interface BillingCheckoutResponse {
+  created: boolean;
+  intent: WebPaymentIntent;
+  payment_url: string | null;
+}
+
+export interface BillingPaymentResponse {
+  payment: WebPaymentIntent;
+}
+
 export interface LibraryArtifact {
   id: string;
   role: string;

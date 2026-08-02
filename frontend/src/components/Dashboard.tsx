@@ -372,7 +372,7 @@ export default function Dashboard({
         </section>
 
         <section className="summary-grid">
-          <article className="summary-card summary-card--subscription">
+          <a className="summary-card summary-card--subscription" href="/billing">
             <div className="summary-icon">◇</div>
             <div>
               <span>Подписка</span>
@@ -381,7 +381,7 @@ export default function Dashboard({
                 {account.auto_renew ? 'Автопродление включено' : 'Автопродление выключено'}
               </small>
             </div>
-          </article>
+          </a>
           <article className="summary-card">
             <div className="summary-icon">▤</div>
             <div>
