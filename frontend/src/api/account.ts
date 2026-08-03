@@ -6,6 +6,9 @@ import type {
   BillingCheckoutResponse,
   BillingPaymentResponse,
   BillingPlansResponse,
+  CatalogTrack,
+  ProjectSourceImport,
+  AccountNotification,
   EditorCapabilities,
   LibraryResponse,
   MaterializedProjectResponse,
@@ -101,7 +104,7 @@ export async function createBillingCheckout(
 ): Promise<BillingCheckoutResponse> {
   return post<BillingCheckoutResponse>(
     '/v1/me/billing/checkout',
-    { period, recurring_consent: true },
+    { period, recurring_consent: false },
     { headers: { 'Idempotency-Key': idempotencyKey } },
   )
 }
@@ -148,6 +151,59 @@ export async function submitProject(
   return post<ProjectSubmitResponse>(
     `/v1/me/projects/${encodeURIComponent(projectId)}/submit`,
     { engine },
+  )
+}
+
+export async function createPianoProcessingRequest(projectId: string): Promise<unknown> {
+  return post<unknown>(
+    `/v1/me/projects/${encodeURIComponent(projectId)}/processing-requests`,
+    {},
+    { headers: { 'Idempotency-Key': `web-piano-${projectId}` } },
+  )
+}
+
+export async function searchCatalog(query: string): Promise<{ tracks: CatalogTrack[] }> {
+  return post<{ tracks: CatalogTrack[] }>('/v1/me/catalog/search', { query })
+}
+
+export async function createProjectImport(input: {
+  source_kind: 'url' | 'catalog_track'
+  source_value: string
+  title?: string
+}): Promise<{ created: boolean; import: ProjectSourceImport }> {
+  return post('/v1/me/projects/import', input, {
+    headers: { 'Idempotency-Key': crypto.randomUUID() },
+  })
+}
+
+export async function getProjectImport(importId: string): Promise<{ import: ProjectSourceImport }> {
+  return get(`/v1/me/project-imports/${encodeURIComponent(importId)}`)
+}
+
+export async function getNotifications(): Promise<{ items: AccountNotification[] }> {
+  return get('/v1/me/notifications')
+}
+
+export async function markNotificationRead(notificationId: string): Promise<void> {
+  await patch(`/v1/me/notifications/${encodeURIComponent(notificationId)}`, {})
+}
+
+export async function sendProjectFeedback(projectId: string, input: {
+  project_version_id?: string
+  rating: number
+  tags: string[]
+  comment: string
+}): Promise<void> {
+  await post(`/v1/me/projects/${encodeURIComponent(projectId)}/feedback`, input, {
+    headers: { 'Idempotency-Key': crypto.randomUUID() },
+  })
+}
+
+export async function renderProjectVideo(projectId: string, versionId: string): Promise<void> {
+  await post(
+    `/v1/me/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/video`,
+    {},
+    { headers: { 'Idempotency-Key': `web-video-${versionId}` } },
   )
 }
 

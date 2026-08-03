@@ -4,6 +4,8 @@ import {
   authenticateWithTelegram,
   getEditorCapabilities,
   getProject,
+  renderProjectVideo,
+  sendProjectFeedback,
 } from '../api/account'
 import { ApiError } from '../api/client'
 import type { LibraryArtifact, ProjectDetail } from '../api/types'
@@ -26,6 +28,7 @@ const ARTIFACT_LABELS: Record<string, string> = {
   midi: 'MIDI',
   pdf: 'Партитура PDF',
   mp3: 'Аудио MP3',
+  preview_mp3: 'Демо 30 секунд',
   vocals: 'Вокал',
   accompaniment: 'Инструментал',
   video: 'Видео',
@@ -49,6 +52,10 @@ export default function ProjectPage({
   const [project, setProject] = useState<ProjectDetail | null>(null)
   const [editorEnabled, setEditorEnabled] = useState(false)
   const [error, setError] = useState('')
+  const [videoBusy, setVideoBusy] = useState(false)
+  const [feedbackRating, setFeedbackRating] = useState(0)
+  const [feedbackComment, setFeedbackComment] = useState('')
+  const [feedbackSent, setFeedbackSent] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -98,8 +105,35 @@ export default function ProjectPage({
   const artifacts = useMemo(() => latest?.artifacts ?? [], [latest])
   const midi = artifact(artifacts, 'midi')
   const playable = artifacts.filter((item) =>
-    ['mp3', 'vocals', 'accompaniment'].includes(item.role),
+    ['mp3', 'preview_mp3', 'vocals', 'accompaniment'].includes(item.role),
   )
+  const locked = latest?.delivery_state === 'locked'
+
+  async function makeVideo() {
+    if (!latest || videoBusy) return
+    setVideoBusy(true)
+    setError('')
+    try {
+      await renderProjectVideo(projectId, latest.version_id)
+      window.location.reload()
+    } catch (videoError) {
+      setError(videoError instanceof ApiError && videoError.status === 402
+        ? 'Сначала откройте полный результат.'
+        : 'Не удалось запустить рендер видео.')
+      setVideoBusy(false)
+    }
+  }
+
+  async function submitFeedback() {
+    if (!latest || feedbackRating < 1) return
+    await sendProjectFeedback(projectId, {
+      project_version_id: latest.version_id,
+      rating: feedbackRating,
+      tags: [],
+      comment: feedbackComment,
+    })
+    setFeedbackSent(true)
+  }
 
   if (!project && !error) {
     return <main className="cabinet-shell studio-centered" data-theme={colorScheme}>Загружаем проект…</main>
@@ -172,6 +206,9 @@ export default function ProjectPage({
                         Редактировать
                       </a>
                     )}
+                    <button className="secondary-action" disabled={videoBusy} onClick={() => void makeVideo()} type="button">
+                      {videoBusy ? 'Запускаем…' : 'Сделать видео'}
+                    </button>
                   </div>
                 )}
               </article>
@@ -201,6 +238,17 @@ export default function ProjectPage({
               </section>
             )}
 
+            {locked && (
+              <section className="queue-panel">
+                <div className="queue-panel__pulse">♬</div>
+                <div>
+                  <h2>Полная версия готова</h2>
+                  <p>Послушайте демо. После покупки откроются MIDI, PDF и полный MP3 — повторная обработка не нужна.</p>
+                  <a className="primary-action" href="/billing">Открыть полный результат →</a>
+                </div>
+              </section>
+            )}
+
             <section className="project-section">
               <div className="section-heading"><div><p className="eyebrow">Файлы</p><h2>Скачать результат</h2></div></div>
               <div className="project-files">
@@ -212,6 +260,17 @@ export default function ProjectPage({
                   </a>
                 ))}
               </div>
+            </section>
+
+            <section className="project-section feedback-panel">
+              <div className="section-heading"><div><p className="eyebrow">Обратная связь</p><h2>Как получился результат?</h2></div></div>
+              {feedbackSent ? <p className="feedback-thanks">Спасибо — это поможет улучшить следующие партитуры.</p> : <>
+                <div className="feedback-stars" aria-label="Оценка от 1 до 5">
+                  {[1, 2, 3, 4, 5].map((rating) => <button className={rating <= feedbackRating ? 'feedback-star feedback-star--active' : 'feedback-star'} key={rating} onClick={() => setFeedbackRating(rating)} type="button">★</button>)}
+                </div>
+                <textarea maxLength={4000} onChange={(event) => setFeedbackComment(event.target.value)} placeholder="Что было хорошо или что стоит исправить?" value={feedbackComment} />
+                <button className="secondary-action" disabled={!feedbackRating} onClick={() => void submitFeedback()} type="button">Отправить отзыв</button>
+              </>}
             </section>
           </>
         )}

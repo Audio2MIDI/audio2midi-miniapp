@@ -66,6 +66,7 @@ export interface AccountSummary {
   subscription_status: string | null;
   result_count: number;
   active_job_count: number;
+  unread_notification_count: number;
 }
 
 export interface AccountResponse {
@@ -137,6 +138,7 @@ export interface BillingPlan {
 
 export interface BillingPlansResponse {
   enabled: boolean;
+  recurring_enabled: boolean;
   currency: 'RUB';
   consent_version: string;
   plans: BillingPlan[];
@@ -226,6 +228,33 @@ export interface ProjectSubmitResponse {
   pending_result_id: string;
   queue_position: number;
   worker_available: boolean;
+}
+
+export interface CatalogTrack {
+  source_id: string;
+  title: string;
+  artist: string;
+  duration_ms: number | null;
+  artwork_url: string | null;
+  source_kind: 'catalog_track';
+}
+
+export interface ProjectSourceImport {
+  id: string;
+  status: 'queued' | 'resolving' | 'ready' | 'failed' | 'cancelled';
+  project_id: string | null;
+  resolved_metadata: Record<string, unknown>;
+  sanitized_error: string | null;
+}
+
+export interface AccountNotification {
+  id: string;
+  kind: string;
+  title: string;
+  body: string;
+  action_url: string | null;
+  read_at: string | null;
+  created_at: string;
 }
 
 export interface ProjectVersion {

@@ -4,12 +4,14 @@ import {
   authenticateWithTelegram,
   getEditorCapabilities,
   getCurrentAccount,
+  getNotifications,
   getLibrary,
   logout,
   materializeEditorProject,
+  markNotificationRead,
 } from '../api/account'
 import { ApiError } from '../api/client'
-import type { AccountSummary, LibraryItem } from '../api/types'
+import type { AccountNotification, AccountSummary, LibraryItem } from '../api/types'
 import EmailAuthForm from './EmailAuthForm'
 import { telegramLoginUrl } from '../routing'
 
@@ -27,6 +29,7 @@ type DashboardState =
       account: AccountSummary
       items: LibraryItem[]
       editorEnabled: boolean
+      notifications: AccountNotification[]
     }
   | { kind: 'error'; message: string }
 
@@ -53,6 +56,7 @@ const ARTIFACT_NAMES: Record<string, string> = {
   midi: 'MIDI',
   pdf: 'PDF',
   mp3: 'MP3',
+  preview_mp3: 'Демо 30 сек.',
   vocals: 'Вокал',
   accompaniment: 'Инструментал',
   transcript: 'Текст',
@@ -99,6 +103,7 @@ function ResultCard({
   editorEnabled: boolean
 }) {
   const midi = item.artifacts.find((artifact) => artifact.role === 'midi')
+  const locked = item.delivery_state === 'locked'
   const isActive = ['queued', 'leased', 'running'].includes(item.status)
   const [openingEditor, setOpeningEditor] = useState(false)
   const [editorError, setEditorError] = useState('')
@@ -184,6 +189,11 @@ function ResultCard({
           ))}
         </div>
       )}
+      {locked && (
+        <p className="result-error">
+          Полная версия готова. <a href="/billing">Открыть MIDI, PDF и MP3</a>
+        </p>
+      )}
       {editorError && <p className="result-error">{editorError}</p>}
     </article>
   )
@@ -218,7 +228,7 @@ export default function Dashboard({
           window.location.replace(returnPath)
           return
         }
-        const [library, editor] = await Promise.all([
+        const [library, editor, notifications] = await Promise.all([
           getLibrary(),
           getEditorCapabilities().catch(() => ({
             enabled: false,
@@ -227,6 +237,7 @@ export default function Dashboard({
             requires_active_subscription: false,
             max_midi_bytes: 0,
           })),
+          getNotifications().catch(() => ({ items: [] })),
         ])
         if (!cancelled) {
           setState({
@@ -234,6 +245,7 @@ export default function Dashboard({
             account: accountResponse.account,
             items: library.items,
             editorEnabled: editor.enabled,
+            notifications: notifications.items,
           })
         }
       } catch (error) {
@@ -328,7 +340,7 @@ export default function Dashboard({
     )
   }
 
-  const { account, editorEnabled } = state
+  const { account, editorEnabled, notifications } = state
   const displayName = account.username ? `@${account.username}` : 'Ваш аккаунт'
 
   return (
@@ -342,6 +354,11 @@ export default function Dashboard({
               <span>Музыка становится видимой</span>
             </div>
           </a>
+          <div className="cabinet-header__actions">
+          <a className="notification-chip" href="#notifications" aria-label="Уведомления">
+            <span>⌁</span>
+            {account.unread_notification_count > 0 && <em>{account.unread_notification_count}</em>}
+          </a>
           <a className="profile-chip" href="/profile">
             <div className="profile-avatar">{displayName.replace('@', '').slice(0, 1).toUpperCase()}</div>
             <div>
@@ -349,6 +366,7 @@ export default function Dashboard({
               <span>Профиль</span>
             </div>
           </a>
+          </div>
         </header>
 
         <section className="hero-panel">
@@ -370,6 +388,21 @@ export default function Dashboard({
             <span style={{ '--note-x': '66%', '--note-y': '56%', '--note-w': '29%' } as React.CSSProperties} />
           </div>
         </section>
+
+        {notifications.length > 0 && (
+          <section className="cabinet-section" id="notifications">
+            <div className="section-heading"><div><p className="eyebrow">Обновления</p><h2>Уведомления</h2></div></div>
+            <div className="notification-list">
+              {notifications.slice(0, 5).map((notification) => (
+                <a className={notification.read_at ? 'notification-item' : 'notification-item notification-item--unread'} href={notification.action_url || '/'} key={notification.id} onClick={() => { if (!notification.read_at) void markNotificationRead(notification.id) }}>
+                  <span>{notification.kind === 'result_ready' ? '✓' : notification.kind === 'result_failed' ? '!' : '•'}</span>
+                  <div><strong>{notification.title}</strong><p>{notification.body}</p></div>
+                  <time>{formatDate(notification.created_at)}</time>
+                </a>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className="summary-grid">
           <a className="summary-card summary-card--subscription" href="/billing">
