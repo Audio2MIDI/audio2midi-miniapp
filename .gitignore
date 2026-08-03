@@ -5,6 +5,8 @@ frontend/node_modules/
 # Build output
 dist/
 frontend/dist/
+frontend/artifacts/
+frontend/test-results/
 
 # Environment
 .env

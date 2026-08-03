@@ -2,18 +2,19 @@ import { useEffect, useMemo, useState } from 'react'
 
 import {
   authenticateWithTelegram,
-  getEditorCapabilities,
   getCurrentAccount,
-  getNotifications,
+  getEditorCapabilities,
   getLibrary,
+  getNotifications,
   logout,
-  materializeEditorProject,
   markNotificationRead,
+  materializeEditorProject,
 } from '../api/account'
 import { ApiError } from '../api/client'
 import type { AccountNotification, AccountSummary, LibraryItem } from '../api/types'
-import EmailAuthForm from './EmailAuthForm'
 import { telegramLoginUrl } from '../routing'
+import EmailAuthForm from './EmailAuthForm'
+import { PageHeading, ProductHeader, ProductLoading, StatusBadge } from './ProductFrame'
 
 interface DashboardProps {
   initData: string | null
@@ -35,9 +36,9 @@ type DashboardState =
 
 const METHOD_NAMES: Record<string, string> = {
   picogen: 'Пиано-кавер',
-  sheetsage: 'Аккорды и мелодия',
-  piano_transcription: 'Транскрипция фортепиано',
-  music2midi: 'Music2MIDI',
+  sheetsage: 'Мелодия и аккорды',
+  piano_transcription: 'Ноты из записи фортепиано',
+  music2midi: 'Быстрый MIDI',
   audio_separator: 'Разделение аудио',
   whisper: 'Текст песни',
   video_render: 'Видео',
@@ -47,21 +48,25 @@ const STATUS_NAMES: Record<string, string> = {
   queued: 'В очереди',
   leased: 'Назначено серверу',
   running: 'Обрабатывается',
+  processing: 'Обрабатывается',
   succeeded: 'Готово',
+  ready: 'Готово',
   failed: 'Не удалось',
   cancelled: 'Отменено',
 }
 
 const ARTIFACT_NAMES: Record<string, string> = {
-  midi: 'MIDI',
-  pdf: 'PDF',
-  mp3: 'MP3',
-  preview_mp3: 'Демо 30 сек.',
-  vocals: 'Вокал',
-  accompaniment: 'Инструментал',
-  transcript: 'Текст',
-  video: 'Видео',
-  archive: 'Архив',
+  midi: 'Скачать MIDI',
+  pdf: 'Скачать PDF',
+  mp3: 'Скачать MP3',
+  wav: 'Скачать WAV',
+  full_audio: 'Скачать аудио',
+  preview_mp3: 'Скачать демо',
+  vocals: 'Скачать вокал',
+  accompaniment: 'Скачать инструментал',
+  transcript: 'Скачать текст',
+  video: 'Скачать видео',
+  archive: 'Скачать архив',
 }
 
 function formatDate(value: string | null): string {
@@ -72,21 +77,16 @@ function formatDate(value: string | null): string {
     day: '2-digit',
     month: 'short',
     year: date.getFullYear() === new Date().getFullYear() ? undefined : 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
   }).format(date)
 }
 
 function subscriptionLabel(account: AccountSummary): string {
   if (!account.subscription_until) return 'Нет активной подписки'
   const until = new Date(account.subscription_until)
-  if (Number.isNaN(until.getTime()) || until <= new Date()) {
-    return 'Подписка закончилась'
-  }
-  return `Активна до ${new Intl.DateTimeFormat('ru-RU', {
+  if (Number.isNaN(until.getTime()) || until <= new Date()) return 'Подписка закончилась'
+  return `Подписка до ${new Intl.DateTimeFormat('ru-RU', {
     day: 'numeric',
     month: 'long',
-    year: 'numeric',
   }).format(until)}`
 }
 
@@ -95,16 +95,14 @@ function visualizerUrl(downloadUrl: string): string {
   return `/visualizer?file=${encodeURIComponent(absoluteDownload)}`
 }
 
-function ResultCard({
-  item,
-  editorEnabled,
-}: {
-  item: LibraryItem
-  editorEnabled: boolean
-}) {
-  const midi = item.artifacts.find((artifact) => artifact.role === 'midi')
-  const locked = item.delivery_state === 'locked'
-  const isActive = ['queued', 'leased', 'running'].includes(item.status)
+function ResultRow({ item, editorEnabled }: { item: LibraryItem; editorEnabled: boolean }) {
+  const midi = item.artifacts.find((entry) => entry.role === 'midi')
+  const active = ['queued', 'leased', 'running', 'processing'].includes(item.status)
+  const primaryUrl = item.project_id
+    ? `/tracks/${item.project_id}`
+    : midi
+      ? visualizerUrl(midi.download_url)
+      : undefined
   const [openingEditor, setOpeningEditor] = useState(false)
   const [editorError, setEditorError] = useState('')
 
@@ -131,93 +129,62 @@ function ResultCard({
 
   return (
     <article className="result-card">
-      <div className="result-card__top">
-        <div className={`method-icon method-icon--${item.engine}`}>
-          {item.engine === 'audio_separator' ? '◐' : item.engine === 'video_render' ? '▶' : '♪'}
-        </div>
-        <div className="result-card__identity">
-          <h3>
-            {item.project_id
-              ? <a href={`/tracks/${item.project_id}`}>{item.title}</a>
-              : item.title}
-          </h3>
-          <p>
-            {METHOD_NAMES[item.engine] ?? item.engine}
-            <span>·</span>
-            {formatDate(item.created_at)}
-          </p>
-        </div>
-        <span className={`status-pill status-pill--${item.status}`}>
-          {isActive && <span className="status-dot" />}
-          {STATUS_NAMES[item.status] ?? item.status}
-        </span>
+      <div className="result-card__icon" aria-hidden="true">
+        {item.engine === 'audio_separator' ? '◐' : item.engine === 'video_render' ? '▶' : '♪'}
       </div>
-
-      {item.sanitized_error && (
-        <p className="result-error">Обработка не завершилась. Задание можно будет повторить позже.</p>
-      )}
-
-      {item.artifacts.length > 0 && (
-        <div className="artifact-row">
-          {midi && (
-            <a className="artifact-button artifact-button--primary" href={visualizerUrl(midi.download_url)}>
-              <span>▶</span>
-              Смотреть
-            </a>
-          )}
+      <div className="result-card__identity">
+        <h3>{item.title}</h3>
+        <p>
+          <span>{METHOD_NAMES[item.engine] ?? 'Музыкальная обработка'}</span>
+          <span>·</span>
+          <span>{formatDate(item.created_at)}</span>
+          {active && <span>· страницу можно закрыть</span>}
+        </p>
+      </div>
+      <StatusBadge status={item.status}>{STATUS_NAMES[item.status] ?? item.status}</StatusBadge>
+      {primaryUrl ? (
+        <a className="result-card__open" href={primaryUrl}>Открыть</a>
+      ) : <span />}
+      <details className="result-menu">
+        <summary aria-label={`Действия: ${item.title}`}>•••</summary>
+        <div className="result-menu__content">
+          {primaryUrl && <a href={primaryUrl}>Открыть композицию</a>}
+          {midi && <a href={visualizerUrl(midi.download_url)}>Открыть визуализацию</a>}
           {midi && editorEnabled && (
-            <button
-              className="artifact-button artifact-button--editor"
-              disabled={openingEditor}
-              onClick={() => void openEditor()}
-              type="button"
-            >
-              <span>✎</span>
-              {openingEditor ? 'Открываем…' : 'Редактировать'}
+            <button disabled={openingEditor} onClick={() => void openEditor()} type="button">
+              {openingEditor ? 'Открываем…' : 'Редактировать MIDI'}
             </button>
           )}
-          {item.artifacts.map((artifact) => (
-            <a
-              className="artifact-button"
-              href={artifact.download_url}
-              key={`${item.id}-${artifact.id}`}
-              rel="noreferrer"
-            >
-              <span>↓</span>
-              {ARTIFACT_NAMES[artifact.role] ?? artifact.role}
+          {item.artifacts.map((entry) => (
+            <a href={entry.download_url} key={entry.id} rel="noreferrer">
+              {ARTIFACT_NAMES[entry.role] ?? `Скачать ${entry.role}`}
             </a>
           ))}
         </div>
+      </details>
+      {item.sanitized_error && (
+        <p className="result-error">Обработка не завершилась. Проект сохранён и его можно повторить позже.</p>
       )}
-      {locked && (
-        <p className="result-error">
-          Полная версия готова. <a href="/billing">Открыть MIDI, PDF и MP3</a>
-        </p>
+      {item.delivery_state === 'locked' && (
+        <p className="result-error">Полная версия готова. <a href="/billing">Открыть файлы</a></p>
       )}
       {editorError && <p className="result-error">{editorError}</p>}
     </article>
   )
 }
 
-export default function Dashboard({
-  initData,
-  colorScheme,
-  returnPath,
-}: DashboardProps) {
+export default function Dashboard({ initData, colorScheme, returnPath }: DashboardProps) {
   const [state, setState] = useState<DashboardState>({ kind: 'loading' })
 
   useEffect(() => {
     let cancelled = false
-
     async function load() {
       try {
         let accountResponse
         try {
           accountResponse = await getCurrentAccount()
         } catch (error) {
-          if (!(error instanceof ApiError) || error.status !== 401 || !initData) {
-            throw error
-          }
+          if (!(error instanceof ApiError) || error.status !== 401 || !initData) throw error
           const authentication = await authenticateWithTelegram(initData)
           if ('merge_required' in authentication && authentication.merge_required) {
             throw new ApiError('Требуется объединить аккаунты в профиле.', 409)
@@ -230,13 +197,7 @@ export default function Dashboard({
         }
         const [library, editor, notifications] = await Promise.all([
           getLibrary(),
-          getEditorCapabilities().catch(() => ({
-            enabled: false,
-            rollout: 'off' as const,
-            can_edit_owned_results: false,
-            requires_active_subscription: false,
-            max_midi_bytes: 0,
-          })),
+          getEditorCapabilities().catch(() => ({ enabled: false })),
           getNotifications().catch(() => ({ items: [] })),
         ])
         if (!cancelled) {
@@ -252,71 +213,35 @@ export default function Dashboard({
         if (cancelled) return
         if (error instanceof ApiError && error.status === 401) {
           setState({ kind: 'signed-out' })
-          return
+        } else {
+          setState({ kind: 'error', message: 'Не удалось загрузить кабинет. Попробуйте ещё раз.' })
         }
-        setState({
-          kind: 'error',
-          message: 'Не удалось загрузить кабинет. Попробуйте ещё раз.',
-        })
       }
     }
-
     void load()
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [initData, returnPath])
 
-  const activeItems = useMemo(
-    () => state.kind === 'ready'
-      ? state.items.filter((item) => ['queued', 'leased', 'running'].includes(item.status))
-      : [],
-    [state],
-  )
-  const historyItems = useMemo(
-    () => state.kind === 'ready'
-      ? state.items.filter((item) => !['queued', 'leased', 'running'].includes(item.status))
-      : [],
-    [state],
-  )
+  const activeItems = useMemo(() => state.kind === 'ready'
+    ? state.items.filter((item) => ['queued', 'leased', 'running', 'processing'].includes(item.status))
+    : [], [state])
+  const historyItems = useMemo(() => state.kind === 'ready'
+    ? state.items.filter((item) => !['queued', 'leased', 'running', 'processing'].includes(item.status))
+    : [], [state])
 
-  if (state.kind === 'loading') {
-    return (
-      <main className="cabinet-shell" data-theme={colorScheme}>
-        <div className="cabinet-loading">
-          <div className="brand-mark">♪</div>
-          <div className="loading-line" />
-          <div className="loading-line loading-line--short" />
-        </div>
-      </main>
-    )
-  }
+  if (state.kind === 'loading') return <ProductLoading label="Открываем кабинет…" />
 
   if (state.kind === 'signed-out') {
     return (
       <main className="cabinet-shell cabinet-shell--centered" data-theme={colorScheme}>
-        <a className="cabinet-home-link" href="https://audio2midi.ru">
-          Audio2MIDI
-        </a>
+        <a className="cabinet-home-link" href="https://audio2midi.ru">Audio2MIDI</a>
         <section className="sign-in-card">
-          <div className="brand-mark">♪</div>
-          <p className="eyebrow">Audio2MIDI</p>
-          <h1>Ваши транскрипции всегда рядом</h1>
-          <p>
-            Войдите по email, чтобы открыть историю, подписку и результаты
-            с любого устройства.
-          </p>
-          <EmailAuthForm
-            onComplete={() =>
-              window.location.assign(returnPath ?? window.location.pathname)
-            }
-          />
+          <p className="eyebrow">Личный кабинет</p>
+          <h1>Ваша музыка всегда рядом</h1>
+          <p>Войдите по email, чтобы открыть историю, подписку и результаты с любого устройства.</p>
+          <EmailAuthForm onComplete={() => window.location.assign(returnPath ?? '/')} />
           <div className="auth-divider"><span>или</span></div>
-          <a className="primary-action" href={telegramLoginUrl(returnPath)}>
-            Открыть через Telegram
-            <span>→</span>
-          </a>
-          <small>Telegram остаётся быстрым способом входа, но не обязателен.</small>
+          <a className="secondary-action" href={telegramLoginUrl(returnPath)}>Войти через Telegram</a>
         </section>
       </main>
     )
@@ -325,77 +250,87 @@ export default function Dashboard({
   if (state.kind === 'error') {
     return (
       <main className="cabinet-shell cabinet-shell--centered" data-theme={colorScheme}>
-        <a className="cabinet-home-link" href="https://audio2midi.ru">
-          Audio2MIDI
-        </a>
+        <a className="cabinet-home-link" href="https://audio2midi.ru">Audio2MIDI</a>
         <section className="sign-in-card">
-          <div className="brand-mark brand-mark--warning">!</div>
-          <h1>Что-то пошло не так</h1>
+          <p className="eyebrow">Ошибка</p>
+          <h1>Кабинет не открылся</h1>
           <p>{state.message}</p>
-          <button className="primary-action" onClick={() => window.location.reload()}>
-            Обновить
-          </button>
+          <button className="primary-action" onClick={() => window.location.reload()} type="button">Попробовать снова</button>
         </section>
       </main>
     )
   }
 
   const { account, editorEnabled, notifications } = state
-  const displayName = account.username ? `@${account.username}` : 'Ваш аккаунт'
+  const displayName = account.username ? `@${account.username}` : 'Профиль'
 
   return (
     <main className="cabinet-shell" data-theme={colorScheme}>
       <div className="cabinet-container">
-        <header className="cabinet-header">
-          <a className="brand" href="https://audio2midi.ru">
-            <div className="brand-mark">♪</div>
-            <div>
-              <strong>Audio2MIDI</strong>
-              <span>Музыка становится видимой</span>
-            </div>
-          </a>
-          <div className="cabinet-header__actions">
-          <a className="notification-chip" href="#notifications" aria-label="Уведомления">
-            <span>⌁</span>
-            {account.unread_notification_count > 0 && <em>{account.unread_notification_count}</em>}
-          </a>
-          <a className="profile-chip" href="/profile">
-            <div className="profile-avatar">{displayName.replace('@', '').slice(0, 1).toUpperCase()}</div>
-            <div>
-              <strong>{displayName}</strong>
-              <span>Профиль</span>
-            </div>
-          </a>
-          </div>
-        </header>
-
-        <section className="hero-panel">
-          <div>
-            <p className="eyebrow">Личный кабинет</p>
-            <h1>Ваша музыка.<br />В удобном виде.</h1>
-            <p className="hero-copy">
-              Транскрипции, ноты и аудиофайлы собраны в одном месте.
-            </p>
-            <a className="hero-new-project" href="/new">
-              Новая композиция
-              <span>→</span>
+        <ProductHeader actions={(
+          <>
+            <a className="notification-chip" href="#notifications" aria-label="Уведомления">
+              <span aria-hidden="true">○</span>
+              {account.unread_notification_count > 0 && <em>{account.unread_notification_count}</em>}
             </a>
-          </div>
-          <div className="hero-note-field" aria-hidden="true">
-            <span style={{ '--note-x': '8%', '--note-y': '68%', '--note-w': '26%' } as React.CSSProperties} />
-            <span style={{ '--note-x': '29%', '--note-y': '45%', '--note-w': '38%' } as React.CSSProperties} />
-            <span style={{ '--note-x': '48%', '--note-y': '27%', '--note-w': '22%' } as React.CSSProperties} />
-            <span style={{ '--note-x': '66%', '--note-y': '56%', '--note-w': '29%' } as React.CSSProperties} />
-          </div>
+            <a className="profile-chip" href="/profile">
+              <div className="profile-avatar">{displayName.replace('@', '').slice(0, 1).toUpperCase()}</div>
+              <div><strong>{displayName}</strong><span>Аккаунт</span></div>
+            </a>
+          </>
+        )} />
+
+        <PageHeading
+          title="Мои композиции"
+          description="Результаты из сайта и Telegram собраны в одной библиотеке."
+          action={<a className="primary-action" href="/new">Новая композиция</a>}
+        />
+
+        <div className="account-strip">
+          <span>{subscriptionLabel(account)}</span>
+          <span className="account-strip__separator" aria-hidden="true" />
+          <span>{account.result_count} {account.result_count === 1 ? 'результат' : 'результатов'}</span>
+          <span className="account-strip__separator" aria-hidden="true" />
+          <span>{account.active_job_count ? `${account.active_job_count} в обработке` : 'Очередь свободна'}</span>
+          <a href="/billing">Тарифы</a>
+        </div>
+
+        {activeItems.length > 0 && (
+          <section className="cabinet-section">
+            <div className="section-heading"><h2>Сейчас обрабатывается</h2><span>Страницу можно закрыть</span></div>
+            <div className="result-list">
+              {activeItems.map((item) => <ResultRow editorEnabled={editorEnabled} item={item} key={item.id} />)}
+            </div>
+          </section>
+        )}
+
+        <section className="cabinet-section">
+          <div className="section-heading"><h2>Библиотека</h2><span>{historyItems.length} из {account.result_count}</span></div>
+          {historyItems.length ? (
+            <div className="result-list">
+              {historyItems.map((item) => <ResultRow editorEnabled={editorEnabled} item={item} key={item.id} />)}
+            </div>
+          ) : (
+            <div className="empty-library">
+              <h3>Здесь появятся ваши композиции</h3>
+              <p>Загрузите первый трек — мы сохраним результат и все доступные файлы в библиотеке.</p>
+              <a className="primary-action" href="/new">Загрузить первую композицию</a>
+            </div>
+          )}
         </section>
 
         {notifications.length > 0 && (
           <section className="cabinet-section" id="notifications">
-            <div className="section-heading"><div><p className="eyebrow">Обновления</p><h2>Уведомления</h2></div></div>
+            <div className="section-heading"><h2>Уведомления</h2></div>
             <div className="notification-list">
               {notifications.slice(0, 5).map((notification) => (
-                <a className={notification.read_at ? 'notification-item' : 'notification-item notification-item--unread'} href={notification.action_url || '/'} key={notification.id} onClick={() => { if (!notification.read_at) void markNotificationRead(notification.id) }}>
-                  <span>{notification.kind === 'result_ready' ? '✓' : notification.kind === 'result_failed' ? '!' : '•'}</span>
+                <a
+                  className={notification.read_at ? 'notification-item' : 'notification-item notification-item--unread'}
+                  href={notification.action_url || '/'}
+                  key={notification.id}
+                  onClick={() => { if (!notification.read_at) void markNotificationRead(notification.id) }}
+                >
+                  <span aria-hidden="true">{notification.kind === 'result_ready' ? '✓' : notification.kind === 'result_failed' ? '!' : '•'}</span>
                   <div><strong>{notification.title}</strong><p>{notification.body}</p></div>
                   <time>{formatDate(notification.created_at)}</time>
                 </a>
@@ -404,95 +339,11 @@ export default function Dashboard({
           </section>
         )}
 
-        <section className="summary-grid">
-          <a className="summary-card summary-card--subscription" href="/billing">
-            <div className="summary-icon">◇</div>
-            <div>
-              <span>Подписка</span>
-              <strong>{subscriptionLabel(account)}</strong>
-              <small>
-                {account.auto_renew ? 'Автопродление включено' : 'Автопродление выключено'}
-              </small>
-            </div>
-          </a>
-          <article className="summary-card">
-            <div className="summary-icon">▤</div>
-            <div>
-              <span>Транскрипции</span>
-              <strong>{account.result_count}</strong>
-              <small>Сохранено в истории</small>
-            </div>
-          </article>
-          <article className="summary-card">
-            <div className="summary-icon">◎</div>
-            <div>
-              <span>В обработке</span>
-              <strong>{account.active_job_count}</strong>
-              <small>{activeItems.length ? 'Можно закрыть приложение' : 'Очередь свободна'}</small>
-            </div>
-          </article>
-        </section>
-
-        {activeItems.length > 0 && (
-          <section className="cabinet-section">
-            <div className="section-heading">
-              <div>
-                <p className="eyebrow">Сейчас</p>
-                <h2>Обрабатывается</h2>
-              </div>
-            </div>
-            <div className="result-list">
-              {activeItems.map((item) => (
-                <ResultCard
-                  editorEnabled={editorEnabled}
-                  item={item}
-                  key={item.id}
-                />
-              ))}
-            </div>
-          </section>
-        )}
-
-        <section className="cabinet-section">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Библиотека</p>
-              <h2>Последние результаты</h2>
-            </div>
-            <span>{historyItems.length} из {account.result_count}</span>
-          </div>
-          {historyItems.length ? (
-            <div className="result-list">
-              {historyItems.map((item) => (
-                <ResultCard
-                  editorEnabled={editorEnabled}
-                  item={item}
-                  key={item.id}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="empty-library">
-              <div className="empty-library__staff">♩ ♪ ♫</div>
-              <h3>Здесь появятся ваши результаты</h3>
-              <p>Загрузите аудиофайл прямо здесь или отправьте песню Telegram-боту.</p>
-              <a href="/new">Создать композицию →</a>
-            </div>
-          )}
-        </section>
-
         <footer className="cabinet-footer">
           <span>Audio2MIDI · 2026</span>
           <div className="cabinet-footer__actions">
             <a href="/support">Поддержка и отмена подписки</a>
-            <button
-              onClick={async () => {
-                await logout()
-                window.location.reload()
-              }}
-            >
-              Выйти
-            </button>
+            <button onClick={async () => { await logout(); window.location.reload() }} type="button">Выйти</button>
           </div>
         </footer>
       </div>

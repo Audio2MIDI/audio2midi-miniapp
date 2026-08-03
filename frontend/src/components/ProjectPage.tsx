@@ -9,6 +9,7 @@ import {
 } from '../api/account'
 import { ApiError } from '../api/client'
 import type { LibraryArtifact, ProjectDetail } from '../api/types'
+import { PageHeading, ProductHeader, ProductLoading, StatusBadge } from './ProductFrame'
 
 interface ProjectPageProps {
   projectId: string
@@ -17,22 +18,22 @@ interface ProjectPageProps {
 }
 
 const STATUS_LABELS: Record<string, string> = {
-  uploading: 'Загрузка',
-  queued: 'В очереди',
-  processing: 'Обрабатывается',
-  ready: 'Готово',
-  failed: 'Ошибка обработки',
+  uploading: 'Загрузка', queued: 'В очереди', processing: 'Обрабатывается', ready: 'Готово', failed: 'Ошибка обработки',
+}
+
+const METHOD_LABELS: Record<string, string> = {
+  picogen: 'Пиано-кавер',
+  piano_transcription: 'Ноты из записи фортепиано',
+  sheetsage: 'Мелодия и аккорды',
+  music2midi: 'Быстрый MIDI',
+  audio_separator: 'Разделение аудио',
 }
 
 const ARTIFACT_LABELS: Record<string, string> = {
-  midi: 'MIDI',
-  pdf: 'Партитура PDF',
-  mp3: 'Аудио MP3',
-  preview_mp3: 'Демо 30 секунд',
-  vocals: 'Вокал',
-  accompaniment: 'Инструментал',
-  video: 'Видео',
-  transcript: 'Текст',
+  midi: 'MIDI', source_midi: 'Исходный MIDI', score_midi: 'MIDI партитуры', musicxml: 'MusicXML',
+  pdf: 'Партитура PDF', mp3: 'Аудио MP3', wav: 'Аудио WAV', full_audio: 'Полное аудио',
+  preview_mp3: 'Демо 30 секунд', vocals: 'Вокал', accompaniment: 'Инструментал',
+  video: 'Видео', transcript: 'Текст', native_pdf: 'Оригинальная партитура', native_lilypond: 'LilyPond',
 }
 
 function visualizerUrl(downloadUrl: string): string {
@@ -44,11 +45,7 @@ function artifact(artifacts: LibraryArtifact[], role: string) {
   return artifacts.find((item) => item.role === role)
 }
 
-export default function ProjectPage({
-  projectId,
-  initData,
-  colorScheme,
-}: ProjectPageProps) {
+export default function ProjectPage({ projectId, initData, colorScheme }: ProjectPageProps) {
   const [project, setProject] = useState<ProjectDetail | null>(null)
   const [editorEnabled, setEditorEnabled] = useState(false)
   const [error, setError] = useState('')
@@ -66,9 +63,7 @@ export default function ProjectPage({
         try {
           response = await getProject(projectId)
         } catch (loadError) {
-          if (!(loadError instanceof ApiError) || loadError.status !== 401 || !initData) {
-            throw loadError
-          }
+          if (!(loadError instanceof ApiError) || loadError.status !== 401 || !initData) throw loadError
           const authentication = await authenticateWithTelegram(initData)
           if ('merge_required' in authentication && authentication.merge_required) {
             throw new ApiError('Сначала объедините аккаунты в профиле.', 409)
@@ -78,35 +73,24 @@ export default function ProjectPage({
         if (cancelled) return
         setProject(response.project)
         const capabilities = await getEditorCapabilities().catch(() => null)
-        if (!cancelled) {
-          setEditorEnabled(Boolean(capabilities?.enabled))
-        }
+        if (!cancelled) setEditorEnabled(Boolean(capabilities?.enabled))
         setError('')
-        if (['queued', 'processing'].includes(response.project.status)) {
-          timer = window.setTimeout(() => void load(), 4000)
-        }
+        if (['queued', 'processing'].includes(response.project.status)) timer = window.setTimeout(() => void load(), 4000)
       } catch (loadError) {
         if (cancelled) return
-        setError(
-          loadError instanceof ApiError && loadError.status === 401
-            ? 'Откройте кабинет через Telegram, чтобы увидеть этот проект.'
-            : 'Не удалось загрузить проект.',
-        )
+        setError(loadError instanceof ApiError && loadError.status === 401
+          ? 'Войдите в кабинет, чтобы открыть эту композицию.'
+          : 'Не удалось загрузить композицию.')
       }
     }
     void load()
-    return () => {
-      cancelled = true
-      if (timer) window.clearTimeout(timer)
-    }
+    return () => { cancelled = true; if (timer) window.clearTimeout(timer) }
   }, [initData, projectId])
 
   const latest = project?.versions[0]
   const artifacts = useMemo(() => latest?.artifacts ?? [], [latest])
-  const midi = artifact(artifacts, 'midi')
-  const playable = artifacts.filter((item) =>
-    ['mp3', 'preview_mp3', 'vocals', 'accompaniment'].includes(item.role),
-  )
+  const midi = artifact(artifacts, 'midi') ?? artifact(artifacts, 'score_midi') ?? artifact(artifacts, 'source_midi')
+  const playable = artifacts.filter((item) => ['mp3', 'wav', 'full_audio', 'preview_mp3', 'vocals', 'accompaniment'].includes(item.role))
   const locked = latest?.delivery_state === 'locked'
 
   async function makeVideo() {
@@ -119,7 +103,7 @@ export default function ProjectPage({
     } catch (videoError) {
       setError(videoError instanceof ApiError && videoError.status === 402
         ? 'Сначала откройте полный результат.'
-        : 'Не удалось запустить рендер видео.')
+        : 'Не удалось запустить создание видео.')
       setVideoBusy(false)
     }
   }
@@ -135,55 +119,44 @@ export default function ProjectPage({
     setFeedbackSent(true)
   }
 
-  if (!project && !error) {
-    return <main className="cabinet-shell studio-centered" data-theme={colorScheme}>Загружаем проект…</main>
-  }
+  if (!project && !error) return <ProductLoading label="Открываем композицию…" />
   if (!project) {
     return (
-      <main className="cabinet-shell studio-centered" data-theme={colorScheme}>
-        <section className="studio-message"><h1>Проект недоступен</h1><p>{error}</p><a href="/">Вернуться в кабинет</a></section>
+      <main className="cabinet-shell cabinet-shell--centered" data-theme={colorScheme}>
+        <section className="studio-message"><h1>Композиция недоступна</h1><p>{error}</p><a className="secondary-action" href="/">Вернуться в кабинет</a></section>
       </main>
     )
   }
 
-  return (
-    <main className="cabinet-shell studio-shell" data-theme={colorScheme}>
-      <div className="cabinet-container">
-        <header className="studio-header">
-          <a className="studio-back" href="/">← Все композиции</a>
-          <a className="studio-new-link" href="/new">+ Новый проект</a>
-        </header>
+  const methodLabel = METHOD_LABELS[latest?.engine ?? ''] ?? 'Музыкальная обработка'
 
-        <section className="project-heading">
-          <div>
-            <p className="eyebrow">Композиция</p>
-            <h1>{project.title}</h1>
-            <p>{project.source_filename || 'MIDI из истории Audio2MIDI'}</p>
-          </div>
-          <span className={`project-status project-status--${project.status}`}>
-            {['queued', 'processing'].includes(project.status) && <i />}
-            {STATUS_LABELS[project.status] ?? project.status}
-          </span>
-        </section>
+  return (
+    <main className="cabinet-shell" data-theme={colorScheme}>
+      <div className="cabinet-container">
+        <ProductHeader backHref="/" backLabel="Все композиции" actions={<a className="primary-action" href="/new">Новая композиция</a>} />
+        <PageHeading
+          eyebrow={methodLabel}
+          title={project.title}
+          description={project.source_filename || 'Композиция из истории Audio2MIDI'}
+          action={<StatusBadge status={project.status}>{STATUS_LABELS[project.status] ?? project.status}</StatusBadge>}
+        />
 
         {['queued', 'processing'].includes(project.status) && (
           <section className="queue-panel">
-            <div className="queue-panel__pulse">♪</div>
+            <div className="queue-panel__pulse" aria-hidden="true">♪</div>
             <div>
-              <h2>{project.status === 'queued' ? 'Задача надёжно сохранена в очереди' : 'Сейчас обрабатываем аудио'}</h2>
-              <p>
-                {project.status === 'queued'
-                  ? 'Даже если GPU-сервер временно занят или недоступен, файл не потеряется.'
-                  : 'Страницу можно закрыть — результат останется в личном кабинете.'}
-              </p>
+              <h2>{project.status === 'queued' ? 'Композиция сохранена в очереди' : 'Обрабатываем аудио'}</h2>
+              <p>{project.status === 'queued'
+                ? 'Файл не потеряется, даже если сервер обработки временно недоступен. Страницу можно закрыть.'
+                : 'Результат появится здесь автоматически. Страницу можно закрыть.'}</p>
             </div>
           </section>
         )}
 
         {project.status === 'failed' && (
           <section className="queue-panel queue-panel--error">
-            <div className="queue-panel__pulse">!</div>
-            <div><h2>Обработка не завершилась</h2><p>{latest?.sanitized_error || 'Мы сохранили проект и можем повторить обработку позже.'}</p></div>
+            <div className="queue-panel__pulse" aria-hidden="true">!</div>
+            <div><h2>Обработка не завершилась</h2><p>{latest?.sanitized_error || 'Проект сохранён — обработку можно повторить позже.'}</p></div>
           </section>
         )}
 
@@ -191,70 +164,44 @@ export default function ProjectPage({
           <>
             <section className="workspace-grid">
               <article className="workspace-card workspace-card--primary">
-                <p className="eyebrow">Piano Roll</p>
-                <h2>Посмотрите результат<br />по нотам и времени.</h2>
-                <div className="workspace-roll" aria-hidden="true">
-                  <span /><span /><span /><span /><span />
-                </div>
+                <p className="eyebrow">Результат</p>
+                <h2>Слушайте и смотрите ноты</h2>
+                {playable.length > 0 ? (
+                  <div className="audio-list">
+                    {playable.slice(0, 2).map((item) => (
+                      <article className="audio-result" key={item.id}>
+                        <strong>{ARTIFACT_LABELS[item.role] ?? item.role}</strong>
+                        <audio controls preload="metadata" src={item.download_url} />
+                      </article>
+                    ))}
+                  </div>
+                ) : <p>Аудиоверсия готовится или недоступна для этого результата.</p>}
                 {midi && (
                   <div className="workspace-actions">
-                    <a className="primary-action" href={visualizerUrl(midi.download_url)}>
-                      Смотреть →
-                    </a>
-                    {editorEnabled && (
-                      <a className="secondary-action" href={`/editor/${project.id}`}>
-                        Редактировать
-                      </a>
-                    )}
-                    <button className="secondary-action" disabled={videoBusy} onClick={() => void makeVideo()} type="button">
-                      {videoBusy ? 'Запускаем…' : 'Сделать видео'}
-                    </button>
+                    <a className="primary-action" href={visualizerUrl(midi.download_url)}>Открыть визуализацию</a>
+                    {editorEnabled && <a className="secondary-action" href={`/editor/${project.id}`}>Редактировать</a>}
                   </div>
                 )}
               </article>
-              <article className="workspace-card">
-                <p className="eyebrow">Версия</p>
-                <h2>{latest?.version_label ?? 'Исходная генерация'}</h2>
-                <p>
-                  {editorEnabled
-                    ? 'Изменения сохраняются как новая версия — исходник останется доступен.'
-                    : 'Редактор сейчас включается по закрытому beta-списку.'}
-                </p>
-                <span className="workspace-version">v{project.versions.length}</span>
-              </article>
             </section>
-
-            {playable.length > 0 && (
-              <section className="project-section">
-                <div className="section-heading"><div><p className="eyebrow">Прослушивание</p><h2>Аудиорезультат</h2></div></div>
-                <div className="audio-list">
-                  {playable.map((item) => (
-                    <article className="audio-result" key={item.id}>
-                      <strong>{ARTIFACT_LABELS[item.role] ?? item.role}</strong>
-                      <audio controls preload="metadata" src={item.download_url} />
-                    </article>
-                  ))}
-                </div>
-              </section>
-            )}
 
             {locked && (
               <section className="queue-panel">
-                <div className="queue-panel__pulse">♬</div>
+                <div className="queue-panel__pulse" aria-hidden="true">♬</div>
                 <div>
                   <h2>Полная версия готова</h2>
-                  <p>Послушайте демо. После покупки откроются MIDI, PDF и полный MP3 — повторная обработка не нужна.</p>
-                  <a className="primary-action" href="/billing">Открыть полный результат →</a>
+                  <p>После покупки откроются MIDI, PDF и полный MP3. Повторная обработка не нужна.</p>
+                  <a className="primary-action" href="/billing">Открыть полный результат</a>
                 </div>
               </section>
             )}
 
             <section className="project-section">
-              <div className="section-heading"><div><p className="eyebrow">Файлы</p><h2>Скачать результат</h2></div></div>
+              <div className="section-heading"><h2>Скачать</h2><span>{artifacts.length} файлов</span></div>
               <div className="project-files">
                 {artifacts.filter((item) => item.role !== 'archive').map((item) => (
                   <a href={item.download_url} key={item.id}>
-                    <span>{item.role === 'midi' ? '♪' : item.role === 'pdf' ? '▤' : '▶'}</span>
+                    <span aria-hidden="true">{item.role.includes('midi') ? '♪' : item.role.includes('pdf') ? '▤' : '▶'}</span>
                     <div><strong>{ARTIFACT_LABELS[item.role] ?? item.role}</strong><small>{item.size_bytes ? `${(item.size_bytes / 1024 / 1024).toFixed(1)} МБ` : 'Готово к скачиванию'}</small></div>
                     <em>↓</em>
                   </a>
@@ -262,15 +209,30 @@ export default function ProjectPage({
               </div>
             </section>
 
+            <section className="project-section">
+              <div className="section-heading"><h2>Другие действия</h2></div>
+              <div className="project-tools">
+                <button className="secondary-action" disabled={!midi || videoBusy} onClick={() => void makeVideo()} type="button">
+                  {videoBusy ? 'Запускаем…' : 'Сделать видео'}
+                </button>
+                <a className="secondary-action" href="/new">Обработать другую композицию</a>
+              </div>
+              {error && <p className="studio-error" role="alert">{error}</p>}
+            </section>
+
             <section className="project-section feedback-panel">
-              <div className="section-heading"><div><p className="eyebrow">Обратная связь</p><h2>Как получился результат?</h2></div></div>
-              {feedbackSent ? <p className="feedback-thanks">Спасибо — это поможет улучшить следующие партитуры.</p> : <>
-                <div className="feedback-stars" aria-label="Оценка от 1 до 5">
-                  {[1, 2, 3, 4, 5].map((rating) => <button className={rating <= feedbackRating ? 'feedback-star feedback-star--active' : 'feedback-star'} key={rating} onClick={() => setFeedbackRating(rating)} type="button">★</button>)}
-                </div>
-                <textarea maxLength={4000} onChange={(event) => setFeedbackComment(event.target.value)} placeholder="Что было хорошо или что стоит исправить?" value={feedbackComment} />
-                <button className="secondary-action" disabled={!feedbackRating} onClick={() => void submitFeedback()} type="button">Отправить отзыв</button>
-              </>}
+              <div className="section-heading"><h2>Как получился результат?</h2></div>
+              {feedbackSent ? <p className="feedback-thanks">Спасибо — это поможет улучшить следующие результаты.</p> : (
+                <>
+                  <div className="feedback-stars" aria-label="Оценка от 1 до 5">
+                    {[1, 2, 3, 4, 5].map((rating) => (
+                      <button className={rating <= feedbackRating ? 'feedback-star feedback-star--active' : 'feedback-star'} key={rating} onClick={() => setFeedbackRating(rating)} type="button">★</button>
+                    ))}
+                  </div>
+                  <textarea maxLength={4000} onChange={(event) => setFeedbackComment(event.target.value)} placeholder="Что было хорошо или что стоит исправить?" value={feedbackComment} />
+                  <button className="secondary-action" disabled={!feedbackRating} onClick={() => void submitFeedback()} type="button">Отправить отзыв</button>
+                </>
+              )}
             </section>
           </>
         )}

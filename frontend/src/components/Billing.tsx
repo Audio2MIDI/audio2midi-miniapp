@@ -156,14 +156,14 @@ export default function Billing({ colorScheme }: BillingProps) {
     <main className="cabinet-shell billing-shell" data-theme={colorScheme}>
       <div className="billing-container">
         <header className="billing-header">
-          <a className="brand" href="/"><strong>Audio2MIDI</strong></a>
+          <a className="brand" href="/">Audio2MIDI</a>
           <a className="support-back-link" href="/profile">Профиль</a>
         </header>
 
         <section className="billing-hero">
           <p className="eyebrow">Подписка</p>
-          <h1>Вся музыка.<br />Без ограничений.</h1>
-          <p>Оплата и обработка работают прямо на сайте — Telegram не требуется.</p>
+          <h1>Выберите период доступа</h1>
+          <p>Один тариф открывает полные MIDI, PDF и аудиофайлы. Telegram не требуется.</p>
           {accessActive(state.account) && state.account.subscription_until && (
             <div className="billing-current-access">
               Доступ уже активен до {formatDate(state.account.subscription_until)}.

@@ -1,15 +1,23 @@
+import { lazy, Suspense, type ReactNode } from 'react'
+
 import { useTelegram } from './hooks/useTelegram'
-import PianoRoll from './components/PianoRoll'
-import Dashboard from './components/Dashboard'
-import NewProject from './components/NewProject'
-import ProjectPage from './components/ProjectPage'
-import Profile from './components/Profile'
-import ResearchLab from './components/ResearchLab'
-import Support from './components/Support'
-import ReelsStudio from './components/ReelsStudio'
-import Billing from './components/Billing'
-import PaymentReturn from './components/PaymentReturn'
 import { safeEditorReturnPath } from './routing'
+import { ProductLoading } from './components/ProductFrame'
+
+const Billing = lazy(() => import('./components/Billing'))
+const Dashboard = lazy(() => import('./components/Dashboard'))
+const NewProject = lazy(() => import('./components/NewProject'))
+const PaymentReturn = lazy(() => import('./components/PaymentReturn'))
+const PianoRoll = lazy(() => import('./components/PianoRoll'))
+const Profile = lazy(() => import('./components/Profile'))
+const ProjectPage = lazy(() => import('./components/ProjectPage'))
+const ReelsStudio = lazy(() => import('./components/ReelsStudio'))
+const ResearchLab = lazy(() => import('./components/ResearchLab'))
+const Support = lazy(() => import('./components/Support'))
+
+function route(content: ReactNode) {
+  return <Suspense fallback={<ProductLoading />}>{content}</Suspense>
+}
 
 function App() {
   const {
@@ -22,110 +30,40 @@ function App() {
     fileUrl,
     returnPath: telegramReturnPath,
   } = useTelegram()
-  const queryReturnPath = safeEditorReturnPath(
-    new URLSearchParams(window.location.search).get('next'),
-  )
+  const queryReturnPath = safeEditorReturnPath(new URLSearchParams(window.location.search).get('next'))
   const returnPath = queryReturnPath ?? telegramReturnPath
 
-  if (window.location.pathname.startsWith('/research/listening')) {
-    return <ResearchLab />
-  }
-
-  if (window.location.pathname === '/support') {
-    return <Support colorScheme={colorScheme} />
-  }
-
-  if (window.location.pathname === '/billing') {
-    return <Billing colorScheme={colorScheme} />
-  }
-
+  if (window.location.pathname.startsWith('/research/listening')) return route(<ResearchLab />)
+  if (window.location.pathname === '/support') return route(<Support colorScheme={colorScheme} />)
+  if (window.location.pathname === '/billing') return route(<Billing colorScheme={colorScheme} />)
   if (window.location.pathname === '/payment/return') {
-    return (
-      <PaymentReturn
-        colorScheme={colorScheme}
-        intentId={new URLSearchParams(window.location.search).get('intent')}
-      />
-    )
+    return route(<PaymentReturn colorScheme={colorScheme} intentId={new URLSearchParams(window.location.search).get('intent')} />)
   }
 
-  const reelsMatch = window.location.pathname.match(
-    /^\/internal\/reels(?:\/([0-9a-f-]+))?$/i,
-  )
-  if (reelsMatch) {
-    return (
-      <ReelsStudio
-        candidateId={reelsMatch[1]}
-        colorScheme={colorScheme}
-      />
-    )
-  }
+  const reelsMatch = window.location.pathname.match(/^\/internal\/reels(?:\/([0-9a-f-]+))?$/i)
+  if (reelsMatch) return route(<ReelsStudio candidateId={reelsMatch[1]} colorScheme={colorScheme} />)
+  if (isLoading) return <ProductLoading />
 
-  if (isLoading) {
-    return (
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '100vh',
-        color: 'var(--text-secondary)',
-        fontSize: 16,
-      }}>
-        Загрузка...
-      </div>
-    )
-  }
-
-  const isVisualizer = Boolean(fileUrl || midiParam)
-    || window.location.pathname === '/visualizer'
-
-  if (window.location.pathname === '/new') {
-    return <NewProject initData={initData} colorScheme={colorScheme} />
-  }
-
-  if (window.location.pathname === '/profile') {
-    return <Profile initData={initData} colorScheme={colorScheme} />
-  }
+  const isVisualizer = Boolean(fileUrl || midiParam) || window.location.pathname === '/visualizer'
+  if (window.location.pathname === '/new') return route(<NewProject initData={initData} colorScheme={colorScheme} />)
+  if (window.location.pathname === '/profile') return route(<Profile initData={initData} colorScheme={colorScheme} />)
 
   const projectMatch = window.location.pathname.match(/^\/tracks\/([0-9a-f-]+)$/i)
   if (projectMatch) {
-    return (
-      <ProjectPage
-        projectId={projectMatch[1]}
-        initData={initData}
-        colorScheme={colorScheme}
-      />
-    )
+    return route(<ProjectPage projectId={projectMatch[1]} initData={initData} colorScheme={colorScheme} />)
   }
 
-  if (!isVisualizer) {
-    return (
-      <Dashboard
-        initData={initData}
-        colorScheme={colorScheme}
-        returnPath={returnPath}
-      />
-    )
-  }
+  if (!isVisualizer) return route(<Dashboard initData={initData} colorScheme={colorScheme} returnPath={returnPath} />)
 
-  return (
-    <div
-      data-theme={colorScheme}
-      style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}
-    >
+  return route(
+    <div data-theme={colorScheme} style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
       {isDev && (
-        <div style={{
-          background: '#e94560',
-          color: '#fff',
-          textAlign: 'center',
-          padding: '3px 8px',
-          fontSize: 11,
-          fontWeight: 600,
-        }}>
+        <div style={{ background: '#e94560', color: '#fff', textAlign: 'center', padding: '3px 8px', fontSize: 11, fontWeight: 600 }}>
           🛠 DEV MODE — open with ?dev=1{midiParam && ` | MIDI: ${midiParam}`}
         </div>
       )}
       <PianoRoll midiParam={midiParam} fileUrl={fileUrl} userId={userId} initData={initData} />
-    </div>
+    </div>,
   )
 }
 
