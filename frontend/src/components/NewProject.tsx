@@ -2,8 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   authenticateWithTelegram,
+  createPianoProcessingRequest,
+  createProjectImport,
   createProjectUpload,
+  getProjectImport,
   getCurrentAccount,
+  searchCatalog,
   submitProject,
   uploadProjectSource,
 } from '../api/account'
@@ -12,7 +16,7 @@ import {
   currentCampaignCode,
   recordCampaignEvent,
 } from '../api/reels'
-import type { AccountSummary } from '../api/types'
+import type { AccountSummary, CatalogTrack } from '../api/types'
 import EmailAuthForm from './EmailAuthForm'
 
 interface NewProjectProps {
@@ -91,6 +95,12 @@ function hasSubscription(account: AccountSummary): boolean {
 export default function NewProject({ initData, colorScheme }: NewProjectProps) {
   const [page, setPage] = useState<PageState>({ kind: 'loading' })
   const [file, setFile] = useState<File | null>(null)
+  const [sourceMode, setSourceMode] = useState<'file' | 'link' | 'catalog'>('file')
+  const [sourceUrl, setSourceUrl] = useState('')
+  const [catalogQuery, setCatalogQuery] = useState('')
+  const [catalogTracks, setCatalogTracks] = useState<CatalogTrack[]>([])
+  const [selectedTrack, setSelectedTrack] = useState<CatalogTrack | null>(null)
+  const [searching, setSearching] = useState(false)
   const [title, setTitle] = useState('')
   const [engine, setEngine] = useState('picogen')
   const [progress, setProgress] = useState('')
@@ -137,8 +147,20 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
   }, [])
 
   const effectiveTitle = useMemo(
-    () => title.trim() || file?.name.replace(/\.[^.]+$/, '') || '',
-    [file, title],
+    () => title.trim() || selectedTrack?.title || file?.name.replace(/\.[^.]+$/, '') || '',
+    [file, selectedTrack, title],
+  )
+
+  const canStart = sourceMode === 'file'
+    ? Boolean(file)
+    : sourceMode === 'link'
+      ? /^https:\/\//i.test(sourceUrl.trim())
+      : Boolean(selectedTrack)
+
+  const availableAccount = page.kind === 'ready' ? page.account : null
+  const hasEntitlement = Boolean(
+    availableAccount
+      && (hasSubscription(availableAccount) || Number(availableAccount.remaining_requests ?? 0) > 0),
   )
 
   function chooseFile(nextFile: File | undefined) {
@@ -157,43 +179,88 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
     if (!title) setTitle(nextFile.name.replace(/\.[^.]+$/, ''))
   }
 
+  async function runCatalogSearch() {
+    const query = catalogQuery.trim()
+    if (query.length < 2) return
+    setSearching(true)
+    setError('')
+    try {
+      const result = await searchCatalog(query)
+      setCatalogTracks(result.tracks)
+      if (!result.tracks.length) setError('Ничего не нашли. Попробуйте исполнителя и название.')
+    } catch (searchError) {
+      setError(searchError instanceof Error ? searchError.message : 'Каталог временно недоступен.')
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  async function waitForImport(importId: string): Promise<string> {
+    for (let attempt = 0; attempt < 150; attempt += 1) {
+      const result = await getProjectImport(importId)
+      if (result.import.status === 'ready' && result.import.project_id) return result.import.project_id
+      if (result.import.status === 'failed') {
+        throw new Error(result.import.sanitized_error || 'Не удалось получить аудио по ссылке.')
+      }
+      setProgress(result.import.status === 'resolving' ? 'Получаем аудио…' : 'Источник в очереди…')
+      await new Promise((resolve) => window.setTimeout(resolve, 2000))
+    }
+    throw new Error('Источник сохранён, но подготовка занимает больше обычного. Проверьте кабинет позже.')
+  }
+
   async function startProcessing() {
-    if (!file || page.kind !== 'ready') return
-    if (!hasSubscription(page.account)) {
-      setError('Для обработки нужна активная подписка. Её можно оформить прямо на сайте.')
+    if (!canStart || page.kind !== 'ready') return
+    if (!hasEntitlement) {
+      setError('Пробные обработки закончились. Оформите доступ прямо на сайте.')
       return
     }
     setError('')
     try {
       await recordCampaignEvent('upload_started', {
         engine,
-        size_bytes: file.size,
+        source: sourceMode,
+        size_bytes: file?.size,
       }).catch(() => undefined)
-      setProgress('Проверяем файл…')
-      const digest = await sha256(file)
-      setProgress('Загружаем аудио в защищённое хранилище…')
-      const upload = await createProjectUpload({
-        title: effectiveTitle,
-        filename: file.name,
-        sha256: digest,
-        size_bytes: file.size,
-        mime_type: mimeForFile(file),
-      })
-      await uploadProjectSource(
-        upload.upload_url,
-        file,
-        upload.required_headers,
-      )
+      let projectId: string
+      if (sourceMode === 'file' && file) {
+        setProgress('Проверяем файл…')
+        const digest = await sha256(file)
+        setProgress('Загружаем аудио в защищённое хранилище…')
+        const upload = await createProjectUpload({
+          title: effectiveTitle,
+          filename: file.name,
+          sha256: digest,
+          size_bytes: file.size,
+          mime_type: mimeForFile(file),
+        })
+        await uploadProjectSource(upload.upload_url, file, upload.required_headers)
+        projectId = upload.project.id
+      } else {
+        setProgress('Готовим источник…')
+        const sourceValue = sourceMode === 'catalog'
+          ? selectedTrack!.source_id
+          : sourceUrl.trim()
+        const created = await createProjectImport({
+          source_kind: sourceMode === 'catalog' ? 'catalog_track' : 'url',
+          source_value: sourceValue,
+          title: effectiveTitle || undefined,
+        })
+        projectId = await waitForImport(created.import.id)
+      }
       setProgress('Ставим задачу в очередь…')
-      await submitProject(upload.project.id, engine)
+      if (engine === 'piano_transcription') {
+        await createPianoProcessingRequest(projectId)
+      } else {
+        await submitProject(projectId, engine)
+      }
       await recordCampaignEvent('upload_completed', {
         engine,
-        project_id: upload.project.id,
+        project_id: projectId,
       }).catch(() => undefined)
-      window.location.assign(`/tracks/${upload.project.id}`)
+      window.location.assign(`/tracks/${projectId}`)
     } catch (submitError) {
       if (submitError instanceof ApiError && submitError.status === 402) {
-        setError('Подписка не активна. Оформите её на сайте и повторите загрузку.')
+        setError('Пробные обработки закончились. Оформите доступ и повторите.')
       } else {
         setError(submitError instanceof Error
           ? submitError.message
@@ -247,9 +314,9 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
         {!hasSubscription(page.account) && (
           <section className="studio-subscription-notice">
             <div>
-              <span>Подписка не активна</span>
-              <strong>Оформите доступ без Telegram</strong>
-              <p>После оплаты вернитесь сюда и загрузите композицию — Telegram не понадобится.</p>
+              <span>Пробный доступ</span>
+              <strong>{page.account.remaining_requests ?? 0} обработки бесплатно</strong>
+              <p>Попробуйте без оплаты. Полные файлы открываются после покупки доступа.</p>
             </div>
             <a className="primary-action" href="/billing">Выбрать тариф →</a>
           </section>
@@ -258,6 +325,12 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
         <div className="studio-grid">
           <section className="studio-panel">
             <div className="studio-step"><span>01</span><div><h2>Аудиофайл</h2><p>До 20 МБ · MP3, WAV, M4A, OGG, FLAC, AAC</p></div></div>
+            <div className="source-tabs" role="tablist">
+              {([['file', 'Файл'], ['link', 'Ссылка'], ['catalog', 'Найти песню']] as const).map(([mode, label]) => (
+                <button className={sourceMode === mode ? 'source-tab source-tab--active' : 'source-tab'} key={mode} onClick={() => { setSourceMode(mode); setError('') }} type="button">{label}</button>
+              ))}
+            </div>
+            {sourceMode === 'file' && <>
             <input
               ref={inputRef}
               hidden
@@ -285,6 +358,27 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
                 <><strong>Выберите файл или перетащите сюда</strong><small>Файл сразу попадёт в приватное хранилище</small></>
               )}
             </button>
+            </>}
+            {sourceMode === 'link' && (
+              <div className="source-link-box">
+                <span className="source-link-box__icon">↗</span>
+                <input value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} placeholder="Ссылка на Яндекс Музыку, Spotify или YouTube" type="url" />
+                <small>Ссылка сохранится как источник проекта; аудио заберёт сервер.</small>
+              </div>
+            )}
+            {sourceMode === 'catalog' && (
+              <div className="catalog-search">
+                <div className="catalog-search__bar"><input value={catalogQuery} onChange={(event) => setCatalogQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void runCatalogSearch() }} placeholder="Исполнитель или название" /><button disabled={searching} onClick={() => void runCatalogSearch()} type="button">{searching ? '…' : 'Найти'}</button></div>
+                <div className="catalog-results">
+                  {catalogTracks.map((track) => (
+                    <button className={selectedTrack?.source_id === track.source_id ? 'catalog-track catalog-track--active' : 'catalog-track'} key={track.source_id} onClick={() => { setSelectedTrack(track); if (!title) setTitle(`${track.artist} — ${track.title}`) }} type="button">
+                      {track.artwork_url ? <img alt="" src={track.artwork_url} /> : <span>♪</span>}
+                      <span><strong>{track.title}</strong><small>{track.artist}</small></span><em>+</em>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <label className="studio-field">
               <span>Название композиции</span>
               <input
@@ -320,11 +414,11 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
             <strong>{effectiveTitle || 'Новая композиция'}</strong>
             <span>{file ? METHODS.find((method) => method.id === engine)?.name : 'Сначала выберите аудиофайл'}</span>
           </div>
-          {hasSubscription(page.account) ? (
+          {hasEntitlement ? (
             <button
               className="primary-action studio-submit__button"
               type="button"
-              disabled={!file || Boolean(progress)}
+              disabled={!canStart || Boolean(progress)}
               onClick={() => void startProcessing()}
             >
               {progress || 'Начать обработку →'}

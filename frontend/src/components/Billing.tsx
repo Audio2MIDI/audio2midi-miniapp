@@ -20,7 +20,7 @@ interface BillingProps {
 type BillingState =
   | { kind: 'loading' }
   | { kind: 'signed-out' }
-  | { kind: 'ready'; account: AccountSummary; plans: BillingPlan[]; enabled: boolean }
+  | { kind: 'ready'; account: AccountSummary; plans: BillingPlan[]; enabled: boolean; recurring: boolean }
   | { kind: 'error'; message: string }
 
 function accessActive(account: AccountSummary): boolean {
@@ -58,6 +58,7 @@ export default function Billing({ colorScheme }: BillingProps) {
         account: account.account,
         plans: billing.plans,
         enabled: billing.enabled,
+        recurring: billing.recurring_enabled,
       })
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
@@ -85,7 +86,7 @@ export default function Billing({ colorScheme }: BillingProps) {
   )
 
   async function checkout() {
-    if (!selectedPlan || !consent || state.kind !== 'ready') return
+    if (!selectedPlan || state.kind !== 'ready' || (state.recurring && !consent)) return
     setBusy(true)
     setMessage('')
     try {
@@ -202,12 +203,13 @@ export default function Billing({ colorScheme }: BillingProps) {
                 <strong>{selectedPlan.price_rub.toLocaleString('ru-RU')} ₽</strong>
               </div>
               <p>
-                Далее — {selectedPlan.price_rub.toLocaleString('ru-RU')} ₽ {selectedPlan.cadence},
-                пока вы не отмените подписку.
+                {state.recurring
+                  ? `Далее — ${selectedPlan.price_rub.toLocaleString('ru-RU')} ₽ ${selectedPlan.cadence}, пока вы не отмените подписку.`
+                  : `Разовая покупка доступа на ${selectedPlan.title.toLowerCase()}. Автоматических списаний нет.`}
               </p>
             </div>
 
-            <label className="billing-consent">
+            {state.recurring && <label className="billing-consent">
               <input
                 checked={consent}
                 onChange={(event) => setConsent(event.target.checked)}
@@ -220,11 +222,11 @@ export default function Billing({ colorScheme }: BillingProps) {
                 Отменить автопродление можно в профиле; оплаченный период сохранится.{' '}
                 <a href="/support">Условия, отмена и возвраты</a>.
               </span>
-            </label>
+            </label>}
 
             <button
               className="primary-action billing-pay-button"
-              disabled={!consent || busy || !state.enabled}
+              disabled={(state.recurring && !consent) || busy || !state.enabled}
               onClick={() => void checkout()}
               type="button"
             >
