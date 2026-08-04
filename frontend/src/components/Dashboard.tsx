@@ -270,7 +270,10 @@ export default function Dashboard({ initData, colorScheme, returnPath }: Dashboa
         <ProductHeader actions={(
           <>
             <a className="notification-chip" href="#notifications" aria-label="Уведомления">
-              <span aria-hidden="true">○</span>
+              <svg aria-hidden="true" className="notification-chip__icon" viewBox="0 0 24 24">
+                <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+                <path d="M10 21h4" />
+              </svg>
               {account.unread_notification_count > 0 && <em>{account.unread_notification_count}</em>}
             </a>
             <a className="profile-chip" href="/profile">
@@ -296,7 +299,7 @@ export default function Dashboard({ initData, colorScheme, returnPath }: Dashboa
         </div>
 
         {activeItems.length > 0 && (
-          <section className="cabinet-section">
+          <section className="cabinet-section" aria-live="polite">
             <div className="section-heading"><h2>Сейчас обрабатывается</h2><span>Страницу можно закрыть</span></div>
             <div className="result-list">
               {activeItems.map((item) => <ResultRow editorEnabled={editorEnabled} item={item} key={item.id} />)}

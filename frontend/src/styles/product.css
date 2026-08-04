@@ -6,7 +6,7 @@
   --product-border-strong: rgba(255, 255, 255, 0.2);
   --product-text: #f7f7f8;
   --product-muted: #a1a1aa;
-  --product-muted-soft: #71717a;
+  --product-muted-soft: #85858f;
   --product-blue: #1d4ed8;
   --product-blue-hover: #2563eb;
   --product-blue-soft: #bfdbfe;
@@ -276,6 +276,16 @@
   color: var(--product-text);
   background: rgba(255, 255, 255, 0.025);
   text-decoration: none;
+}
+
+.notification-chip__icon {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
 }
 
 .notification-chip {
@@ -1744,9 +1754,22 @@
 
   .project-files,
   .profile-grid,
-  .support-grid,
-  .billing-plans {
+  .support-grid {
     grid-template-columns: 1fr;
+  }
+
+  .billing-plans {
+    gap: 8px;
+  }
+
+  .billing-plan {
+    min-height: 112px !important;
+    padding: 14px !important;
+  }
+
+  .billing-plan strong {
+    margin-top: 12px;
+    font-size: 26px;
   }
 
   .profile-card--wide,

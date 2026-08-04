@@ -49,7 +49,7 @@ export function PageHeading({ eyebrow, title, description, action }: PageHeading
 export function ProductLoading({ label = 'Загрузка…' }: { label?: string }) {
   return (
     <main className="product-shell product-shell--centered" aria-busy="true">
-      <div className="product-loading">
+      <div className="product-loading" aria-live="polite" role="status">
         <span className="product-loading__mark" aria-hidden="true">♪</span>
         <span>{label}</span>
       </div>

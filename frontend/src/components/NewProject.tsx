@@ -73,6 +73,20 @@ function hasSubscription(account: AccountSummary): boolean {
   return new Date(account.subscription_until) > new Date()
 }
 
+function freeProcessingLabel(value: number | null): string {
+  const count = Math.max(0, Number(value ?? 0))
+  const modulo100 = count % 100
+  const modulo10 = count % 10
+  const noun = modulo100 >= 11 && modulo100 <= 14
+    ? 'обработок'
+    : modulo10 === 1
+      ? 'обработка'
+      : modulo10 >= 2 && modulo10 <= 4
+        ? 'обработки'
+        : 'обработок'
+  return `${count} бесплатн${noun === 'обработка' ? 'ая' : noun === 'обработки' ? 'ые' : 'ых'} ${noun}`
+}
+
 export default function NewProject({ initData, colorScheme }: NewProjectProps) {
   const savedDraft = useMemo(() => readProjectDraft(window.sessionStorage), [])
   const [page, setPage] = useState<PageState>({ kind: 'loading' })
@@ -290,6 +304,7 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
           {(['source', 'result', 'review'] as const).map((item, index) => (
             <button
               className={`wizard-progress__step${step === item ? ' wizard-progress__step--active' : ''}${stepNumber > index + 1 ? ' wizard-progress__step--done' : ''}`}
+              aria-current={step === item ? 'step' : undefined}
               disabled={index + 1 > stepNumber}
               key={item}
               onClick={() => goToStep(item)}
@@ -303,7 +318,7 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
 
         {!hasSubscription(page.account) && (
           <p className="trial-line">
-            <strong>{page.account.remaining_requests ?? 0} бесплатные обработки</strong>
+            <strong>{freeProcessingLabel(page.account.remaining_requests)}</strong>
             <span>·</span>
             <a href="/billing">Тарифы</a>
           </p>
@@ -315,6 +330,7 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
               {([['file', 'Файл'], ['link', 'Ссылка'], ['catalog', 'Найти песню']] as const).map(([mode, label]) => (
                 <button
                   className={sourceMode === mode ? 'source-tab source-tab--active' : 'source-tab'}
+                  aria-selected={sourceMode === mode}
                   key={mode}
                   onClick={() => { setSourceMode(mode); setError('') }}
                   role="tab"
@@ -383,7 +399,7 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
           <section className="studio-panel">
             <div className="method-picker">
               {METHODS.filter((method) => PRIMARY_ENGINES.includes(method.id as typeof PRIMARY_ENGINES[number])).map((method) => (
-                <button className={engine === method.id ? 'method-choice method-choice--active' : 'method-choice'} key={method.id} type="button" onClick={() => setEngine(method.id)}>
+                <button aria-pressed={engine === method.id} className={engine === method.id ? 'method-choice method-choice--active' : 'method-choice'} key={method.id} type="button" onClick={() => setEngine(method.id)}>
                   <span className="method-choice__note">♪</span>
                   <span><strong>{method.name}</strong><small>{method.hint}</small></span>
                   <em>{engine === method.id ? 'Выбрано' : 'Выбрать'}</em>
@@ -394,7 +410,7 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
               <summary>Другие инструменты</summary>
               <div className="method-picker">
                 {METHODS.filter((method) => SECONDARY_ENGINES.includes(method.id as typeof SECONDARY_ENGINES[number])).map((method) => (
-                  <button className={engine === method.id ? 'method-choice method-choice--active' : 'method-choice'} key={method.id} type="button" onClick={() => setEngine(method.id)}>
+                  <button aria-pressed={engine === method.id} className={engine === method.id ? 'method-choice method-choice--active' : 'method-choice'} key={method.id} type="button" onClick={() => setEngine(method.id)}>
                     <span className="method-choice__note">♪</span>
                     <span><strong>{method.name}</strong><small>{method.hint}</small></span>
                     <em>{engine === method.id ? 'Выбрано' : 'Выбрать'}</em>
@@ -410,7 +426,7 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
             <div className="review-row"><span>Источник</span><strong>{sourceLabel}</strong><button onClick={() => goToStep('source')} type="button">Изменить</button></div>
             <div className="review-row"><span>Название</span><strong>{effectiveTitle}</strong><button onClick={() => goToStep('source')} type="button">Изменить</button></div>
             <div className="review-row"><span>Результат</span><strong>{selectedMethod.name}</strong><button onClick={() => goToStep('result')} type="button">Изменить</button></div>
-            <div className="review-row"><span>Доступ</span><strong>{hasSubscription(page.account) ? 'Активная подписка' : hasEntitlement ? `${page.account.remaining_requests ?? 0} бесплатные обработки` : 'Нужен тариф'}</strong></div>
+            <div className="review-row"><span>Доступ</span><strong>{hasSubscription(page.account) ? 'Активная подписка' : hasEntitlement ? freeProcessingLabel(page.account.remaining_requests) : 'Нужен тариф'}</strong></div>
           </section>
         )}
 

@@ -175,6 +175,7 @@ export default function Billing({ colorScheme }: BillingProps) {
         <section className="billing-plans" aria-label="Тарифы">
           {state.plans.map((plan) => (
             <button
+              aria-pressed={plan.period === selectedPeriod}
               className={plan.period === selectedPeriod
                 ? 'billing-plan billing-plan--selected'
                 : 'billing-plan'}

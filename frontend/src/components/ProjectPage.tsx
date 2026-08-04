@@ -110,13 +110,18 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
 
   async function submitFeedback() {
     if (!latest || feedbackRating < 1) return
-    await sendProjectFeedback(projectId, {
-      project_version_id: latest.version_id,
-      rating: feedbackRating,
-      tags: [],
-      comment: feedbackComment,
-    })
-    setFeedbackSent(true)
+    setError('')
+    try {
+      await sendProjectFeedback(projectId, {
+        project_version_id: latest.version_id,
+        rating: feedbackRating,
+        tags: [],
+        comment: feedbackComment,
+      })
+      setFeedbackSent(true)
+    } catch {
+      setError('Не удалось отправить отзыв. Попробуйте ещё раз.')
+    }
   }
 
   if (!project && !error) return <ProductLoading label="Открываем композицию…" />
@@ -171,7 +176,7 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
                     {playable.slice(0, 2).map((item) => (
                       <article className="audio-result" key={item.id}>
                         <strong>{ARTIFACT_LABELS[item.role] ?? item.role}</strong>
-                        <audio controls preload="metadata" src={item.download_url} />
+                        <audio aria-label={ARTIFACT_LABELS[item.role] ?? item.role} controls preload="metadata" src={item.download_url} />
                       </article>
                     ))}
                   </div>
@@ -226,7 +231,14 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
                 <>
                   <div className="feedback-stars" aria-label="Оценка от 1 до 5">
                     {[1, 2, 3, 4, 5].map((rating) => (
-                      <button className={rating <= feedbackRating ? 'feedback-star feedback-star--active' : 'feedback-star'} key={rating} onClick={() => setFeedbackRating(rating)} type="button">★</button>
+                      <button
+                        aria-label={`${rating} из 5`}
+                        aria-pressed={feedbackRating === rating}
+                        className={rating <= feedbackRating ? 'feedback-star feedback-star--active' : 'feedback-star'}
+                        key={rating}
+                        onClick={() => setFeedbackRating(rating)}
+                        type="button"
+                      >★</button>
                     ))}
                   </div>
                   <textarea maxLength={4000} onChange={(event) => setFeedbackComment(event.target.value)} placeholder="Что было хорошо или что стоит исправить?" value={feedbackComment} />
