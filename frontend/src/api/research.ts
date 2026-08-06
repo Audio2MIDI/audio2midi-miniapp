@@ -10,6 +10,7 @@ export interface ResearchExperiment {
   track_count: number
   sample_count: number
   condition_count: number
+  card_count: number
 }
 
 export interface ResearchSample {
@@ -123,6 +124,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
           track_count: 12,
           sample_count: 108,
           condition_count: 3,
+          card_count: 60,
         }],
       } as T
     }
