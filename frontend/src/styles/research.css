@@ -746,7 +746,13 @@
 
   .research-header {
     align-items: flex-start;
+    gap: 12px;
     margin-bottom: 60px;
+  }
+
+  .research-header__actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 
   .research-brand {
