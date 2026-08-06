@@ -32,6 +32,12 @@ export interface ResearchTrack {
 
 export interface ResearchComparison {
   experiment_id: string
+  card_id?: string
+  block?: 'model' | 'corruption' | 'difficulty'
+  question?: {
+    prompt: string
+    choices: Array<'left' | 'right' | 'tie' | 'both_bad'>
+  }
   track: {
     id: string
     title: string
@@ -79,11 +85,21 @@ export interface ResearchResults {
   conditions: Record<string, ResearchConditionResult>
   pairwise: ResearchPairResult[]
   tags: Record<string, number>
+  calibration?: {
+    card_vote_count: number
+    blocks: Record<string, number>
+    repeat_consistency: number | null
+    controlled_corruption_accuracy: number | null
+    metric_agreement: Record<string, { comparisons: number; accuracy: number }>
+    errors_by_track?: Record<string, { comparisons: number; errors: number }>
+    errors_by_pathology?: Record<string, { comparisons: number; errors: number }>
+  }
 }
 
 export interface ResearchVote {
   experiment_id: string
   session_id: string
+  card_id?: string
   left_sample_id: string
   right_sample_id: string
   choice: 'left' | 'right' | 'tie' | 'both_bad'
@@ -191,6 +207,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         },
         pairwise: [],
         tags: { loop: 6, chord_pounding: 4, melody_lost: 2 },
+        calibration: {
+          card_vote_count: 18,
+          blocks: { model: 8, corruption: 8, difficulty: 2 },
+          repeat_consistency: 0.83,
+          controlled_corruption_accuracy: 0.88,
+          metric_agreement: {
+            'source.chroma_dtw_similarity': { comparisons: 12, accuracy: 0.75 },
+          },
+          errors_by_track: {
+            'midnight-arrangement': { comparisons: 2, errors: 1 },
+          },
+          errors_by_pathology: {
+            loop: { comparisons: 3, errors: 1 },
+          },
+        },
       } as T
     }
   }
@@ -234,12 +265,14 @@ export async function listResearchTracks(
 export function getNextResearchComparison(
   experimentId: string,
   trackId?: string,
+  mode: 'legacy' | 'calibration' = 'legacy',
+  block?: 'model' | 'corruption' | 'difficulty',
 ): Promise<NextComparisonResponse> {
-  const params = trackId
-    ? `?track_id=${encodeURIComponent(trackId)}`
-    : ''
+  const search = new URLSearchParams({ mode })
+  if (trackId) search.set('track_id', trackId)
+  if (block) search.set('block', block)
   return request<NextComparisonResponse>(
-    `/experiments/${encodeURIComponent(experimentId)}/next${params}`,
+    `/experiments/${encodeURIComponent(experimentId)}/next?${search.toString()}`,
   )
 }
 
