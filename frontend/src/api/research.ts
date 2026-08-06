@@ -119,12 +119,20 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       return {
         experiments: [{
           id: 'listening-lab-preview',
-          title: 'Production baseline vs E008 vs E010',
+          title: 'CoverBench v0 · слепая калибровка',
           status: 'active',
+          track_count: 12,
+          sample_count: 132,
+          condition_count: 3,
+          card_count: 60,
+        }, {
+          id: 'legacy-listening-preview',
+          title: 'Предыдущий эксперимент',
+          status: 'closed',
           track_count: 12,
           sample_count: 108,
           condition_count: 3,
-          card_count: 60,
+          card_count: 0,
         }],
       } as T
     }
