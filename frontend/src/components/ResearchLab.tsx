@@ -329,6 +329,8 @@ export default function ResearchLab() {
           return
         }
         setExperimentId(first.id)
+        const firstMode: ResearchMode = first.card_count > 0 ? 'calibration' : 'legacy'
+        setMode(firstMode)
         const trackItems = await refreshTracks(first.id)
         const firstTrack = trackItems.find((item) => item.completed < item.total)
           ?? trackItems[0]
@@ -338,7 +340,7 @@ export default function ResearchLab() {
           return
         }
         setTrackId(firstTrack.id)
-        await loadNext(first.id, firstTrack.id, 'legacy', 'model')
+        await loadNext(first.id, firstTrack.id, firstMode, 'model')
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : 'Не удалось открыть лабораторию')
         setState('error')
@@ -439,6 +441,31 @@ export default function ResearchLab() {
     await loadNext(experimentId, nextTrackId, mode, calibrationBlock)
   }
 
+  async function selectExperiment(nextExperimentId: string) {
+    if (!nextExperimentId || nextExperimentId === experimentId) return
+    const nextExperiment = experiments.find((item) => item.id === nextExperimentId)
+    if (!nextExperiment) return
+    activeAudio.current?.pause()
+    setExperimentId(nextExperimentId)
+    setView('compare')
+    const nextMode: ResearchMode = nextExperiment.card_count > 0
+      ? 'calibration'
+      : 'legacy'
+    setMode(nextMode)
+    setCalibrationBlock('model')
+    const trackItems = await refreshTracks(nextExperimentId)
+    const firstTrack = trackItems.find((item) => item.completed < item.total)
+      ?? trackItems[0]
+    if (!firstTrack) {
+      setComparison(null)
+      setError('В эксперименте пока нет композиций')
+      setState('error')
+      return
+    }
+    setTrackId(firstTrack.id)
+    await loadNext(nextExperimentId, firstTrack.id, nextMode, 'model')
+  }
+
   async function moveTrack(offset: number) {
     const nextTrack = tracks[activeTrackIndex + offset]
     if (nextTrack) await selectTrack(nextTrack.id)
@@ -529,6 +556,26 @@ export default function ResearchLab() {
         {error && <div className="research-error">{error}</div>}
 
         {view === 'results' && results && <ResultsView results={results} />}
+
+        {view === 'compare' && experiments.length > 1 && (
+          <section className="research-track-nav">
+            <div className="research-track-picker">
+              <label htmlFor="research-experiment">Набор сравнений</label>
+              <select
+                id="research-experiment"
+                value={experimentId}
+                onChange={(event) => void selectExperiment(event.target.value)}
+                disabled={state === 'submitting'}
+              >
+                {experiments.map((experiment) => (
+                  <option value={experiment.id} key={experiment.id}>
+                    {experiment.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </section>
+        )}
 
         {view === 'compare' && mode === 'calibration' && (
           <section className="research-track-nav">
