@@ -31,6 +31,7 @@ const TAGS: Array<{ id: string; label: string }> = [
   { id: 'unplayable', label: 'неиграбельно' },
   { id: 'no_breathing', label: 'нет музыкального дыхания' },
   { id: 'broken_structure', label: 'сломана структура' },
+  { id: 'mismatched_song', label: 'чужая композиция' },
   { id: 'render_problem', label: 'проблема только в рендере' },
   { id: 'wrong_rhythm', label: 'неверный ритм' },
   { id: 'wrong_bars', label: 'неправильные такты' },
@@ -51,6 +52,8 @@ const RATINGS: Array<{ id: string; label: string }> = [
 ]
 
 type View = 'compare' | 'results'
+type ResearchMode = 'legacy' | 'calibration'
+type CalibrationBlock = 'model' | 'corruption' | 'difficulty'
 type LoadState = 'loading' | 'ready' | 'submitting' | 'error'
 type VariantSide = 'left' | 'right'
 type VariantRatings = Record<VariantSide, Record<string, number>>
@@ -127,6 +130,8 @@ function ResearchPlayer({
 function ResultsView({ results }: { results: ResearchResults }) {
   const rows = Object.entries(results.conditions)
     .sort(([, left], [, right]) => right.wins - left.wins)
+  const errorsByTrack = results.calibration?.errors_by_track ?? {}
+  const errorsByPathology = results.calibration?.errors_by_pathology ?? {}
 
   return (
     <section className="research-results">
@@ -135,6 +140,70 @@ function ResultsView({ results }: { results: ResearchResults }) {
         <div><strong>{results.reviewer_count}</strong><span>рецензентов</span></div>
         <div><strong>{rows.length}</strong><span>условий</span></div>
       </div>
+
+      {results.calibration && results.calibration.card_vote_count > 0 && (
+        <div className="research-tag-summary">
+          <p>Калибровка метрик</p>
+          <div>
+            <span>Карточек · {results.calibration.card_vote_count}</span>
+            <span>
+              Повторы · {results.calibration.repeat_consistency === null
+                ? 'недостаточно данных'
+                : `${Math.round(results.calibration.repeat_consistency * 100)}%`}
+            </span>
+            <span>
+              Искажения · {results.calibration.controlled_corruption_accuracy === null
+                ? 'недостаточно данных'
+                : `${Math.round(results.calibration.controlled_corruption_accuracy * 100)}%`}
+            </span>
+          </div>
+          {Object.keys(results.calibration.metric_agreement).length > 0 && (
+            <div className="research-table-wrap">
+              <table>
+                <thead>
+                  <tr><th>Метрика</th><th>Пар</th><th>Совпадение с выбором</th></tr>
+                </thead>
+                <tbody>
+                  {Object.entries(results.calibration.metric_agreement).map(([name, value]) => (
+                    <tr key={name}>
+                      <td>{name}</td>
+                      <td>{value.comparisons}</td>
+                      <td>{Math.round(value.accuracy * 100)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {(Object.keys(errorsByTrack).length > 0
+            || Object.keys(errorsByPathology).length > 0) && (
+            <div className="research-table-wrap">
+              <table>
+                <thead>
+                  <tr><th>Срез ошибок</th><th>Ошибок</th><th>Проверок</th></tr>
+                </thead>
+                <tbody>
+                  {Object.entries(errorsByPathology)
+                    .map(([name, value]) => (
+                      <tr key={`pathology-${name}`}>
+                        <td>{TAGS.find((item) => item.id === name)?.label ?? name}</td>
+                        <td>{value.errors}</td>
+                        <td>{value.comparisons}</td>
+                      </tr>
+                    ))}
+                  {Object.entries(errorsByTrack).map(([name, value]) => (
+                    <tr key={`track-${name}`}>
+                      <td>Композиция · {name}</td>
+                      <td>{value.errors}</td>
+                      <td>{value.comparisons}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="research-table-wrap">
         <table>
@@ -196,6 +265,8 @@ export default function ResearchLab() {
   const [state, setState] = useState<LoadState>('loading')
   const [error, setError] = useState('')
   const [view, setView] = useState<View>('compare')
+  const [mode, setMode] = useState<ResearchMode>('legacy')
+  const [calibrationBlock, setCalibrationBlock] = useState<CalibrationBlock>('model')
   const [results, setResults] = useState<ResearchResults | null>(null)
   const [expandedPianoRoll, setExpandedPianoRoll] = useState<ResearchSample | null>(null)
   const [expandedPdf, setExpandedPdf] = useState<ResearchSample | null>(null)
@@ -211,11 +282,21 @@ export default function ResearchLab() {
     [trackId, tracks],
   )
 
-  const loadNext = useCallback(async (id: string, selectedTrackId: string) => {
+  const loadNext = useCallback(async (
+    id: string,
+    selectedTrackId: string,
+    selectedMode: ResearchMode,
+    selectedBlock: CalibrationBlock,
+  ) => {
     setState('loading')
     setError('')
     try {
-      const payload = await getNextResearchComparison(id, selectedTrackId)
+      const payload = await getNextResearchComparison(
+        id,
+        selectedMode === 'legacy' ? selectedTrackId : undefined,
+        selectedMode,
+        selectedMode === 'calibration' ? selectedBlock : undefined,
+      )
       setComparison(payload.comparison)
       setProgress(payload.progress)
       setExperimentProgress(payload.experiment_progress)
@@ -257,7 +338,7 @@ export default function ResearchLab() {
           return
         }
         setTrackId(firstTrack.id)
-        await loadNext(first.id, firstTrack.id)
+        await loadNext(first.id, firstTrack.id, 'legacy', 'model')
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : 'Не удалось открыть лабораторию')
         setState('error')
@@ -281,6 +362,7 @@ export default function ResearchLab() {
       await submitResearchVote({
         experiment_id: comparison.experiment_id,
         session_id: sessionId(),
+        card_id: comparison.card_id,
         left_sample_id: comparison.left.id,
         right_sample_id: comparison.right.id,
         choice,
@@ -290,13 +372,28 @@ export default function ResearchLab() {
         response_ms: Math.max(0, Math.round(performance.now() - startedAt.current)),
       })
       activeAudio.current?.pause()
-      await refreshTracks(comparison.experiment_id)
-      await loadNext(comparison.experiment_id, comparison.track.id)
+      if (mode === 'legacy') await refreshTracks(comparison.experiment_id)
+      await loadNext(
+        comparison.experiment_id,
+        comparison.track.id,
+        mode,
+        calibrationBlock,
+      )
     } catch (voteError) {
       setError(voteError instanceof Error ? voteError.message : 'Не удалось сохранить оценку')
       setState('ready')
     }
-  }, [comment, comparison, loadNext, ratings, refreshTracks, selectedTags, state])
+  }, [
+    calibrationBlock,
+    comment,
+    comparison,
+    loadNext,
+    mode,
+    ratings,
+    refreshTracks,
+    selectedTags,
+    state,
+  ])
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -339,7 +436,7 @@ export default function ResearchLab() {
     activeAudio.current?.pause()
     setTrackId(nextTrackId)
     setView('compare')
-    await loadNext(experimentId, nextTrackId)
+    await loadNext(experimentId, nextTrackId, mode, calibrationBlock)
   }
 
   async function moveTrack(offset: number) {
@@ -361,9 +458,19 @@ export default function ResearchLab() {
     }
   }
 
-  async function showCompare() {
+  async function switchMode(nextMode: ResearchMode) {
+    if (!experimentId || nextMode === mode) return
+    activeAudio.current?.pause()
+    setMode(nextMode)
     setView('compare')
-    if (experimentId && trackId) await loadNext(experimentId, trackId)
+    await loadNext(experimentId, trackId, nextMode, calibrationBlock)
+  }
+
+  async function switchCalibrationBlock(nextBlock: CalibrationBlock) {
+    if (!experimentId || nextBlock === calibrationBlock) return
+    activeAudio.current?.pause()
+    setCalibrationBlock(nextBlock)
+    await loadNext(experimentId, trackId, 'calibration', nextBlock)
   }
 
   function toggleTag(tag: string) {
@@ -385,10 +492,16 @@ export default function ResearchLab() {
           <a href="https://audio2midi.ru" className="research-brand">Audio2MIDI</a>
           <div className="research-header__actions">
             <button
-              className={view === 'compare' ? 'is-active' : ''}
-              onClick={() => void showCompare()}
+              className={view === 'compare' && mode === 'legacy' ? 'is-active' : ''}
+              onClick={() => void switchMode('legacy')}
             >
               Blind A/B
+            </button>
+            <button
+              className={view === 'compare' && mode === 'calibration' ? 'is-active' : ''}
+              onClick={() => void switchMode('calibration')}
+            >
+              Калибровка метрик
             </button>
             <button
               className={view === 'results' ? 'is-active' : ''}
@@ -417,7 +530,27 @@ export default function ResearchLab() {
 
         {view === 'results' && results && <ResultsView results={results} />}
 
-        {view === 'compare' && tracks.length > 0 && (
+        {view === 'compare' && mode === 'calibration' && (
+          <section className="research-track-nav">
+            <div className="research-track-picker">
+              <label htmlFor="research-block">Блок карточек</label>
+              <select
+                id="research-block"
+                value={calibrationBlock}
+                onChange={(event) => void switchCalibrationBlock(
+                  event.target.value as CalibrationBlock,
+                )}
+                disabled={state === 'submitting'}
+              >
+                <option value="model">Реальные пары моделей</option>
+                <option value="corruption">Контролируемые искажения</option>
+                <option value="difficulty">Сложность и сохранение материала</option>
+              </select>
+            </div>
+          </section>
+        )}
+
+        {view === 'compare' && mode === 'legacy' && tracks.length > 0 && (
           <section className="research-track-nav">
             <div className="research-track-picker">
               <label htmlFor="research-track">Композиция</label>
@@ -472,12 +605,20 @@ export default function ResearchLab() {
         {view === 'compare' && state !== 'loading' && !comparison && !error && (
           <section className="research-complete">
             <span>✓</span>
-            <h2>Эта композиция полностью оценена</h2>
+            <h2>
+              {mode === 'calibration'
+                ? 'Этот блок калибровки полностью оценён'
+                : 'Эта композиция полностью оценена'}
+            </h2>
             <p>
-              Можно перейти к следующей композиции или открыть общие результаты эксперимента.
+              {mode === 'calibration'
+                ? 'Можно выбрать другой блок выше или открыть общие результаты эксперимента.'
+                : 'Можно перейти к следующей композиции или открыть общие результаты эксперимента.'}
             </p>
             <div className="research-complete__actions">
-              {activeTrackIndex >= 0 && activeTrackIndex < tracks.length - 1 && (
+              {mode === 'legacy'
+                && activeTrackIndex >= 0
+                && activeTrackIndex < tracks.length - 1 && (
                 <button onClick={() => void moveTrack(1)}>Следующая композиция →</button>
               )}
               <button onClick={() => void showResults()}>Открыть результаты</button>
@@ -518,8 +659,11 @@ export default function ResearchLab() {
 
             <section className="research-review">
               <div className="research-question">
-                <p>ОБЩЕЕ ПРЕДПОЧТЕНИЕ</p>
-                <h2>Какой вариант лучше работает как фортепианный кавер?</h2>
+                <p>{mode === 'calibration' ? 'КАЛИБРОВКА МЕТРИК' : 'ОБЩЕЕ ПРЕДПОЧТЕНИЕ'}</p>
+                <h2>
+                  {comparison.question?.prompt
+                    ?? 'Какой вариант лучше работает как фортепианный кавер?'}
+                </h2>
               </div>
               <div className="research-votes">
                 <button onClick={() => void vote('left')} disabled={state === 'submitting'}>
