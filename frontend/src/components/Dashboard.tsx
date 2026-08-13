@@ -11,6 +11,7 @@ import {
   materializeEditorProject,
 } from '../api/account'
 import { ApiError } from '../api/client'
+import { getAnalyticsAccess, trackProductEvent, type AnalyticsRole } from '../api/analytics'
 import type { AccountNotification, AccountSummary, LibraryItem } from '../api/types'
 import { telegramLoginUrl } from '../routing'
 import EmailAuthForm from './EmailAuthForm'
@@ -31,6 +32,7 @@ type DashboardState =
       items: LibraryItem[]
       editorEnabled: boolean
       notifications: AccountNotification[]
+      analyticsRole: AnalyticsRole | null
     }
   | { kind: 'error'; message: string }
 
@@ -105,6 +107,11 @@ function ResultRow({ item, editorEnabled }: { item: LibraryItem; editorEnabled: 
       : undefined
   const [openingEditor, setOpeningEditor] = useState(false)
   const [editorError, setEditorError] = useState('')
+  const opened = () => void trackProductEvent('result.opened', {
+    objectType: item.source === 'job' ? 'job' : 'legacy_result',
+    objectId: item.id,
+    properties: { engine: item.engine, result_kind: item.source, surface: 'library' },
+  })
 
   async function openEditor() {
     if (!midi || openingEditor) return
@@ -143,12 +150,12 @@ function ResultRow({ item, editorEnabled }: { item: LibraryItem; editorEnabled: 
       </div>
       <StatusBadge status={item.status}>{STATUS_NAMES[item.status] ?? item.status}</StatusBadge>
       {primaryUrl ? (
-        <a className="result-card__open" href={primaryUrl}>Открыть</a>
+        <a className="result-card__open" href={primaryUrl} onClick={opened}>Открыть</a>
       ) : <span />}
       <details className="result-menu">
         <summary aria-label={`Действия: ${item.title}`}>•••</summary>
         <div className="result-menu__content">
-          {primaryUrl && <a href={primaryUrl}>Открыть композицию</a>}
+          {primaryUrl && <a href={primaryUrl} onClick={opened}>Открыть композицию</a>}
           {midi && <a href={visualizerUrl(midi.download_url)}>Открыть визуализацию</a>}
           {midi && editorEnabled && (
             <button disabled={openingEditor} onClick={() => void openEditor()} type="button">
@@ -156,7 +163,10 @@ function ResultRow({ item, editorEnabled }: { item: LibraryItem; editorEnabled: 
             </button>
           )}
           {item.artifacts.map((entry) => (
-            <a href={entry.download_url} key={entry.id} rel="noreferrer">
+            <a href={entry.download_url} key={entry.id} rel="noreferrer" onClick={() => void trackProductEvent('result.downloaded', {
+              objectType: 'artifact', objectId: entry.id,
+              properties: { engine: item.engine, result_kind: entry.role, surface: 'library' },
+            })}>
               {ARTIFACT_NAMES[entry.role] ?? `Скачать ${entry.role}`}
             </a>
           ))}
@@ -195,10 +205,11 @@ export default function Dashboard({ initData, colorScheme, returnPath }: Dashboa
           window.location.replace(returnPath)
           return
         }
-        const [library, editor, notifications] = await Promise.all([
+        const [library, editor, notifications, analytics] = await Promise.all([
           getLibrary(),
           getEditorCapabilities().catch(() => ({ enabled: false })),
           getNotifications().catch(() => ({ items: [] })),
+          getAnalyticsAccess().catch(() => null),
         ])
         if (!cancelled) {
           setState({
@@ -207,6 +218,7 @@ export default function Dashboard({ initData, colorScheme, returnPath }: Dashboa
             items: library.items,
             editorEnabled: editor.enabled,
             notifications: notifications.items,
+            analyticsRole: analytics?.role ?? null,
           })
         }
       } catch (error) {
@@ -261,7 +273,7 @@ export default function Dashboard({ initData, colorScheme, returnPath }: Dashboa
     )
   }
 
-  const { account, editorEnabled, notifications } = state
+  const { account, editorEnabled, notifications, analyticsRole } = state
   const displayName = account.username ? `@${account.username}` : 'Профиль'
 
   return (
@@ -269,6 +281,7 @@ export default function Dashboard({ initData, colorScheme, returnPath }: Dashboa
       <div className="cabinet-container">
         <ProductHeader actions={(
           <>
+            {analyticsRole && <a className="text-action" href="/internal/analytics">Аналитика</a>}
             <a className="notification-chip" href="#notifications" aria-label="Уведомления">
               <svg aria-hidden="true" className="notification-chip__icon" viewBox="0 0 24 24">
                 <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
