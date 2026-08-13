@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 
 import { ApiError } from '../api/client'
 import { getAnalyticsBundle, type AnalyticsBundle } from '../api/analytics'
+import { moscowDate } from '../analyticsDate'
 import { PageHeading, ProductHeader, ProductLoading, StatusBadge } from './ProductFrame'
 
 type State = { kind: 'loading' } | { kind: 'denied' } | { kind: 'error'; message: string } | { kind: 'ready'; data: AnalyticsBundle }
@@ -13,17 +14,12 @@ const LABELS: Record<string, string> = {
   renewal_without_binding: 'Автопродление без привязки', jobs_without_account_24h: 'Задачи без аккаунта, 24 ч', ready_not_delivered: 'Готово, но не доставлено', rollup_freshness: 'Свежесть агрегатов',
 }
 
-function isoDate(offsetDays = 0) {
-  const date = new Date()
-  date.setDate(date.getDate() + offsetDays)
-  return date.toISOString().slice(0, 10)
-}
 function rub(kopecks: number) { return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(kopecks / 100) }
 function pct(value: number, total: number) { return total ? `${Math.round((value / total) * 100)}%` : '—' }
 
 export default function AnalyticsDashboard({ colorScheme }: { colorScheme?: string }) {
-  const [from, setFrom] = useState(isoDate(-6))
-  const [to, setTo] = useState(isoDate())
+  const [from, setFrom] = useState(moscowDate(-6))
+  const [to, setTo] = useState(moscowDate())
   const [channel, setChannel] = useState('')
   const [state, setState] = useState<State>({ kind: 'loading' })
 
@@ -53,7 +49,7 @@ export default function AnalyticsDashboard({ colorScheme }: { colorScheme?: stri
         <PageHeading eyebrow="Внутренний раздел" title="Продукт в цифрах" description="Оплаты, использование кабинета и Telegram, удержание и качество — в одной системе счёта." />
         <form className="analytics-filters" onSubmit={(event) => event.preventDefault()}>
           <label>С <input type="date" value={from} max={to} onChange={(event) => { setState({ kind: 'loading' }); setFrom(event.target.value) }} /></label>
-          <label>По <input type="date" value={to} min={from} max={isoDate()} onChange={(event) => { setState({ kind: 'loading' }); setTo(event.target.value) }} /></label>
+          <label>По <input type="date" value={to} min={from} max={moscowDate()} onChange={(event) => { setState({ kind: 'loading' }); setTo(event.target.value) }} /></label>
           <label>Канал <select value={channel} onChange={(event) => { setState({ kind: 'loading' }); setChannel(event.target.value) }}><option value="">Все</option><option value="telegram">Telegram</option><option value="web">Веб</option><option value="recurring">Автопродление</option><option value="admin">Вручную</option></select></label>
         </form>
 
@@ -77,12 +73,12 @@ export default function AnalyticsDashboard({ colorScheme }: { colorScheme?: stri
 
         <section className="analytics-section">
           <header><div><p className="eyebrow">Деньги</p><h2>Оплаты по дням и каналам</h2></div></header>
-          <div className="revenue-bars">{data.payments.daily.length ? data.payments.daily.map((row) => <div className="revenue-row" key={`${row.day}-${row.channel}`}><time>{new Date(row.day).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' })}</time><span>{row.channel}</span><i><b style={{ width: `${Math.max(2, row.gross_kopek / maxRevenue * 100)}%` }} /></i><strong>{rub(row.gross_kopek)}</strong><small>{row.paid} оплат · {row.failed} ошибок</small></div>) : <p className="analytics-empty">За выбранный период подтверждённых операций нет.</p>}</div>
+          <div className="revenue-bars">{data.payments.daily.length ? data.payments.daily.map((row) => <div className="revenue-row" key={`${row.day}-${row.channel}`}><time>{new Date(row.day).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short', timeZone: 'UTC' })}</time><span>{row.channel}</span><i><b style={{ width: `${Math.max(2, row.gross_kopek / maxRevenue * 100)}%` }} /></i><strong>{rub(row.gross_kopek)}</strong><small>{row.paid} оплат · {row.failed} ошибок</small></div>) : <p className="analytics-empty">За выбранный период подтверждённых операций нет.</p>}</div>
         </section>
 
         <section className="analytics-section">
           <header><div><p className="eyebrow">Удержание</p><h2>Возвращаются после результата</h2></div></header>
-          <div className="analytics-table-wrap"><table><thead><tr><th>Когорта</th><th>Размер</th><th>D1</th><th>D7</th><th>За 7 дней</th><th>D30</th><th>За 30 дней</th></tr></thead><tbody>{data.retention.cohorts.map((row) => <tr key={row.cohort_date}><td>{new Date(row.cohort_date).toLocaleDateString('ru-RU')}</td><td>{row.cohort_size}</td><td>{pct(row.d1, row.cohort_size)}</td><td>{pct(row.d7, row.cohort_size)}</td><td>{pct(row.r7, row.cohort_size)}</td><td>{pct(row.d30, row.cohort_size)}</td><td>{pct(row.r30, row.cohort_size)}</td></tr>)}</tbody></table></div>
+          <div className="analytics-table-wrap"><table><thead><tr><th>Когорта</th><th>Размер</th><th>D1</th><th>D7</th><th>За 7 дней</th><th>D30</th><th>За 30 дней</th></tr></thead><tbody>{data.retention.cohorts.map((row) => <tr key={row.cohort_date}><td>{new Date(row.cohort_date).toLocaleDateString('ru-RU', { timeZone: 'UTC' })}</td><td>{row.cohort_size}</td><td>{pct(row.d1, row.cohort_size)}</td><td>{pct(row.d7, row.cohort_size)}</td><td>{pct(row.r7, row.cohort_size)}</td><td>{pct(row.d30, row.cohort_size)}</td><td>{pct(row.r30, row.cohort_size)}</td></tr>)}</tbody></table></div>
         </section>
 
         <section className="analytics-section">
