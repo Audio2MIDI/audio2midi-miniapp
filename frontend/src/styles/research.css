@@ -382,6 +382,14 @@
   border-radius: 26px;
 }
 
+.research-variants--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.research-variants--single .research-variant {
+  width: 100%;
+}
+
 .research-question h2 {
   max-width: 740px;
   margin: 0;
@@ -518,6 +526,25 @@
   border-color: rgba(228, 134, 58, 0.6);
   color: #ffd5ad;
   background: rgba(184, 92, 22, 0.18);
+}
+
+.research-wrong-song {
+  width: 100%;
+  margin-top: 12px;
+  border: 1px solid rgba(255, 122, 122, 0.42);
+  border-radius: 12px;
+  padding: 11px 14px;
+  color: #ffb4b4;
+  background: rgba(126, 28, 28, 0.12);
+  font: inherit;
+  cursor: pointer;
+}
+
+.research-vote-saved {
+  margin: 10px 0 0;
+  color: #9ae6b4;
+  font-size: 12px;
+  text-align: center;
 }
 
 .research-details textarea {
@@ -746,7 +773,13 @@
 
   .research-header {
     align-items: flex-start;
+    gap: 12px;
     margin-bottom: 60px;
+  }
+
+  .research-header__actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 
   .research-brand {
