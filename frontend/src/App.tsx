@@ -14,6 +14,7 @@ const ProjectPage = lazy(() => import('./components/ProjectPage'))
 const ReelsStudio = lazy(() => import('./components/ReelsStudio'))
 const ResearchLab = lazy(() => import('./components/ResearchLab'))
 const Support = lazy(() => import('./components/Support'))
+const AnalyticsDashboard = lazy(() => import('./components/AnalyticsDashboard'))
 
 function route(content: ReactNode) {
   return <Suspense fallback={<ProductLoading />}>{content}</Suspense>
@@ -42,6 +43,7 @@ function App() {
 
   const reelsMatch = window.location.pathname.match(/^\/internal\/reels(?:\/([0-9a-f-]+))?$/i)
   if (reelsMatch) return route(<ReelsStudio candidateId={reelsMatch[1]} colorScheme={colorScheme} />)
+  if (window.location.pathname === '/internal/analytics') return route(<AnalyticsDashboard colorScheme={colorScheme} />)
   if (isLoading) return <ProductLoading />
 
   const isVisualizer = Boolean(fileUrl || midiParam) || window.location.pathname === '/visualizer'
