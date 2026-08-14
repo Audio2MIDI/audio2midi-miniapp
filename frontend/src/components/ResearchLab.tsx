@@ -5,6 +5,8 @@ import {
   getResearchResults,
   listResearchExperiments,
   listResearchTracks,
+  researchExperimentCardCount,
+  researchExperimentKind,
   submitResearchVote,
 } from '../api/research'
 import type {
@@ -16,6 +18,7 @@ import type {
   ResearchTrack,
   ResearchVote,
 } from '../api/research'
+import { isSourceIdentityQuestion, withWrongSongTag } from './researchVote'
 
 const TAGS: Array<{ id: string; label: string }> = [
   { id: 'loop', label: 'зацикливание' },
@@ -31,7 +34,7 @@ const TAGS: Array<{ id: string; label: string }> = [
   { id: 'unplayable', label: 'неиграбельно' },
   { id: 'no_breathing', label: 'нет музыкального дыхания' },
   { id: 'broken_structure', label: 'сломана структура' },
-  { id: 'mismatched_song', label: 'чужая композиция' },
+  { id: 'mismatched_song', label: 'это другая песня' },
   { id: 'render_problem', label: 'проблема только в рендере' },
   { id: 'wrong_rhythm', label: 'неверный ритм' },
   { id: 'wrong_bars', label: 'неправильные такты' },
@@ -76,17 +79,20 @@ function ResearchPlayer({
   onPlay,
   onOpenPianoRoll,
   onOpenPdf,
+  title,
+  hideDownloads = false,
 }: {
   sample: ResearchSample
   onPlay: (element: HTMLAudioElement) => void
   onOpenPianoRoll: (sample: ResearchSample) => void
   onOpenPdf: (sample: ResearchSample) => void
+  title?: string
+  hideDownloads?: boolean
 }) {
   return (
     <article className="research-variant">
       <div className="research-variant__title">
-        <span>Вариант</span>
-        <strong>{sample.label}</strong>
+        {title ? <strong>{title}</strong> : <><span>Вариант</span><strong>{sample.label}</strong></>}
       </div>
       <audio
         controls
@@ -112,17 +118,19 @@ function ResearchPlayer({
           </button>
         </div>
       )}
-      <div className="research-downloads">
-        <a className="research-download" href={sample.midi_url}>MIDI</a>
-        {sample.musicxml_url && (
-          <a className="research-download" href={sample.musicxml_url}>MusicXML</a>
-        )}
-        {sample.pdf_url && (
-          <button type="button" onClick={() => onOpenPdf(sample)}>
-            Открыть PDF ↗
-          </button>
-        )}
-      </div>
+      {!hideDownloads && (
+        <div className="research-downloads">
+          <a className="research-download" href={sample.midi_url}>MIDI</a>
+          {sample.musicxml_url && (
+            <a className="research-download" href={sample.musicxml_url}>MusicXML</a>
+          )}
+          {sample.pdf_url && (
+            <button type="button" onClick={() => onOpenPdf(sample)}>
+              Открыть PDF ↗
+            </button>
+          )}
+        </div>
+      )}
     </article>
   )
 }
@@ -270,6 +278,7 @@ export default function ResearchLab() {
   const [results, setResults] = useState<ResearchResults | null>(null)
   const [expandedPianoRoll, setExpandedPianoRoll] = useState<ResearchSample | null>(null)
   const [expandedPdf, setExpandedPdf] = useState<ResearchSample | null>(null)
+  const [voteSaved, setVoteSaved] = useState(false)
   const startedAt = useRef(0)
   const activeAudio = useRef<HTMLAudioElement | null>(null)
 
@@ -281,6 +290,13 @@ export default function ResearchLab() {
     () => tracks.findIndex((item) => item.id === trackId),
     [trackId, tracks],
   )
+  const calibrationOnly = activeExperiment
+    ? researchExperimentCardCount(activeExperiment) > 0
+    : false
+  const sourceIdentityAudit = isSourceIdentityQuestion(comparison?.question?.kind)
+    || (activeExperiment
+      ? researchExperimentKind(activeExperiment) === 'source_identity_audit'
+      : false)
 
   const loadNext = useCallback(async (
     id: string,
@@ -329,7 +345,9 @@ export default function ResearchLab() {
           return
         }
         setExperimentId(first.id)
-        const firstMode: ResearchMode = first.card_count > 0 ? 'calibration' : 'legacy'
+        const firstMode: ResearchMode = researchExperimentCardCount(first) > 0
+          ? 'calibration'
+          : 'legacy'
         setMode(firstMode)
         const trackItems = await refreshTracks(first.id)
         const firstTrack = trackItems.find((item) => item.completed < item.total)
@@ -356,10 +374,14 @@ export default function ResearchLab() {
     activeAudio.current = element
   }, [])
 
-  const vote = useCallback(async (choice: ResearchVote['choice']) => {
+  const vote = useCallback(async (
+    choice: ResearchVote['choice'],
+    tagOverride?: string[],
+  ) => {
     if (!comparison || state === 'submitting') return
     setState('submitting')
     setError('')
+    setVoteSaved(false)
     try {
       await submitResearchVote({
         experiment_id: comparison.experiment_id,
@@ -368,11 +390,12 @@ export default function ResearchLab() {
         left_sample_id: comparison.left.id,
         right_sample_id: comparison.right.id,
         choice,
-        tags: selectedTags,
+        tags: tagOverride ?? selectedTags,
         ratings,
         comment,
         response_ms: Math.max(0, Math.round(performance.now() - startedAt.current)),
       })
+      setVoteSaved(true)
       activeAudio.current?.pause()
       if (mode === 'legacy') await refreshTracks(comparison.experiment_id)
       await loadNext(
@@ -448,7 +471,7 @@ export default function ResearchLab() {
     activeAudio.current?.pause()
     setExperimentId(nextExperimentId)
     setView('compare')
-    const nextMode: ResearchMode = nextExperiment.card_count > 0
+    const nextMode: ResearchMode = researchExperimentCardCount(nextExperiment) > 0
       ? 'calibration'
       : 'legacy'
     setMode(nextMode)
@@ -487,6 +510,7 @@ export default function ResearchLab() {
 
   async function switchMode(nextMode: ResearchMode) {
     if (!experimentId || nextMode === mode) return
+    if (calibrationOnly && nextMode === 'legacy') return
     activeAudio.current?.pause()
     setMode(nextMode)
     setView('compare')
@@ -518,30 +542,38 @@ export default function ResearchLab() {
         <header className="research-header">
           <a href="https://audio2midi.ru" className="research-brand">Audio2MIDI</a>
           <div className="research-header__actions">
-            <button
-              className={view === 'compare' && mode === 'legacy' ? 'is-active' : ''}
-              onClick={() => void switchMode('legacy')}
-            >
-              Blind A/B
-            </button>
+            {!calibrationOnly && (
+              <button
+                className={view === 'compare' && mode === 'legacy' ? 'is-active' : ''}
+                onClick={() => void switchMode('legacy')}
+              >
+                Blind A/B
+              </button>
+            )}
             <button
               className={view === 'compare' && mode === 'calibration' ? 'is-active' : ''}
               onClick={() => void switchMode('calibration')}
             >
-              Калибровка метрик
+              {sourceIdentityAudit ? 'Проверка исходников' : 'Калибровка метрик'}
             </button>
-            <button
-              className={view === 'results' ? 'is-active' : ''}
-              onClick={() => void showResults()}
-            >
-              Результаты
-            </button>
+            {!sourceIdentityAudit && (
+              <button
+                className={view === 'results' ? 'is-active' : ''}
+                onClick={() => void showResults()}
+              >
+                Результаты
+              </button>
+            )}
           </div>
         </header>
 
         <section className="research-intro">
           <p>INTERNAL LISTENING LAB</p>
-          <h1>Слушаем модель,<br />а не её название.</h1>
+          <h1>
+            {sourceIdentityAudit
+              ? <>Проверяем данные,<br />а не модель.</>
+              : <>Слушаем модель,<br />а не её название.</>}
+          </h1>
           <div className="research-intro__meta">
             <span>{activeExperiment?.title ?? 'Загрузка эксперимента'}</span>
             <span>
@@ -577,7 +609,7 @@ export default function ResearchLab() {
           </section>
         )}
 
-        {view === 'compare' && mode === 'calibration' && (
+        {view === 'compare' && mode === 'calibration' && !sourceIdentityAudit && (
           <section className="research-track-nav">
             <div className="research-track-picker">
               <label htmlFor="research-block">Блок карточек</label>
@@ -677,7 +709,7 @@ export default function ResearchLab() {
           <>
             <section className="research-source">
               <div>
-                <p>ОРИГИНАЛ</p>
+                <p>{sourceIdentityAudit ? 'ПРЕДПОЛАГАЕМЫЙ ОРИГИНАЛ' : 'ОРИГИНАЛ'}</p>
                 <h2>{comparison.track.title}</h2>
                 <span>{comparison.track.artist}</span>
               </div>
@@ -689,51 +721,85 @@ export default function ResearchLab() {
               />
             </section>
 
-            <section className="research-variants">
+            <section className={`research-variants${sourceIdentityAudit ? ' research-variants--single' : ''}`}>
               <ResearchPlayer
                 sample={comparison.left}
                 onPlay={pauseOtherPlayers}
                 onOpenPianoRoll={setExpandedPianoRoll}
                 onOpenPdf={setExpandedPdf}
+                title={sourceIdentityAudit ? 'Человеческая фортепианная версия' : undefined}
+                hideDownloads={sourceIdentityAudit}
               />
-              <ResearchPlayer
-                sample={comparison.right}
-                onPlay={pauseOtherPlayers}
-                onOpenPianoRoll={setExpandedPianoRoll}
-                onOpenPdf={setExpandedPdf}
-              />
+              {!sourceIdentityAudit && (
+                <ResearchPlayer
+                  sample={comparison.right}
+                  onPlay={pauseOtherPlayers}
+                  onOpenPianoRoll={setExpandedPianoRoll}
+                  onOpenPdf={setExpandedPdf}
+                />
+              )}
             </section>
 
             <section className="research-review">
               <div className="research-question">
-                <p>{mode === 'calibration' ? 'КАЛИБРОВКА МЕТРИК' : 'ОБЩЕЕ ПРЕДПОЧТЕНИЕ'}</p>
+                <p>
+                  {sourceIdentityAudit
+                    ? 'ПРОВЕРКА ПАРЫ'
+                    : mode === 'calibration' ? 'КАЛИБРОВКА МЕТРИК' : 'ОБЩЕЕ ПРЕДПОЧТЕНИЕ'}
+                </p>
                 <h2>
                   {comparison.question?.prompt
-                    ?? 'Какой вариант лучше работает как фортепианный кавер?'}
+                    ?? (sourceIdentityAudit
+                      ? 'Это фортепианная версия той же композиции, что и оригинал выше?'
+                      : 'Какой вариант лучше работает как фортепианный кавер?')}
                 </h2>
               </div>
               <div className="research-votes">
                 <button onClick={() => void vote('left')} disabled={state === 'submitting'}>
-                  <kbd>A</kbd> Вариант A
+                  <kbd>A</kbd> {comparison.question?.labels?.left
+                    ?? (sourceIdentityAudit ? 'Да, это одна песня' : 'Вариант A')}
                 </button>
                 <button onClick={() => void vote('tie')} disabled={state === 'submitting'}>
-                  <kbd>T</kbd> Примерно равны
+                  <kbd>T</kbd> {comparison.question?.labels?.tie
+                    ?? (sourceIdentityAudit ? 'Не уверен' : 'Примерно равны')}
                 </button>
                 <button onClick={() => void vote('right')} disabled={state === 'submitting'}>
-                  <kbd>B</kbd> Вариант B
+                  <kbd>B</kbd> {comparison.question?.labels?.right
+                    ?? (sourceIdentityAudit ? 'Нет, это другая песня' : 'Вариант B')}
                 </button>
                 <button
                   className="research-vote--bad"
                   onClick={() => void vote('both_bad')}
                   disabled={state === 'submitting'}
                 >
-                  <kbd>X</kbd> Оба плохие
+                  <kbd>X</kbd> {comparison.question?.labels?.both_bad
+                    ?? (sourceIdentityAudit ? 'Файлы сломаны' : 'Оба плохие')}
                 </button>
               </div>
 
+              {voteSaved && (
+                <p className="research-vote-saved" role="status">
+                  ✓ Последняя оценка сохранена
+                </p>
+              )}
+
+              {!sourceIdentityAudit && (
+                <button
+                  type="button"
+                  className="research-wrong-song"
+                  onClick={() => void vote(
+                    'both_bad',
+                    withWrongSongTag(selectedTags),
+                  )}
+                  disabled={state === 'submitting'}
+                >
+                  ⚠ Это другая песня — сохранить и дальше
+                </button>
+              )}
+
               <details className="research-details">
                 <summary>Что именно не так?</summary>
-                <div className="research-ratings">
+                {!sourceIdentityAudit && <div className="research-ratings">
                   {(['left', 'right'] as const).map((side) => (
                     <fieldset key={side}>
                       <legend>Вариант {side === 'left' ? 'A' : 'B'}</legend>
@@ -761,8 +827,8 @@ export default function ResearchLab() {
                       ))}
                     </fieldset>
                   ))}
-                </div>
-                <div className="research-tags">
+                </div>}
+                {!sourceIdentityAudit && <div className="research-tags">
                   {TAGS.map((tag) => (
                     <button
                       className={selectedTags.includes(tag.id) ? 'is-selected' : ''}
@@ -772,7 +838,7 @@ export default function ResearchLab() {
                       {tag.label}
                     </button>
                   ))}
-                </div>
+                </div>}
                 <textarea
                   value={comment}
                   onChange={(event) => setComment(event.target.value)}
