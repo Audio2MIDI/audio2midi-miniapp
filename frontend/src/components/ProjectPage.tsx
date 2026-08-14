@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   authenticateWithTelegram,
@@ -8,6 +8,7 @@ import {
   sendProjectFeedback,
 } from '../api/account'
 import { ApiError } from '../api/client'
+import { trackProductEvent } from '../api/analytics'
 import type { LibraryArtifact, ProjectDetail } from '../api/types'
 import { PageHeading, ProductHeader, ProductLoading, StatusBadge } from './ProductFrame'
 
@@ -53,6 +54,8 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
   const [feedbackRating, setFeedbackRating] = useState(0)
   const [feedbackComment, setFeedbackComment] = useState('')
   const [feedbackSent, setFeedbackSent] = useState(false)
+  const [feedbackVisible, setFeedbackVisible] = useState(false)
+  const projectOpenTracked = useRef(false)
 
   useEffect(() => {
     let cancelled = false
@@ -72,6 +75,13 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
         }
         if (cancelled) return
         setProject(response.project)
+        setFeedbackSent(response.project.feedback_submitted)
+        if (!projectOpenTracked.current) {
+          projectOpenTracked.current = true
+          void trackProductEvent('project.opened', {
+            objectType: 'project', objectId: projectId, properties: { surface: 'project' },
+          })
+        }
         const capabilities = await getEditorCapabilities().catch(() => null)
         if (!cancelled) setEditorEnabled(Boolean(capabilities?.enabled))
         setError('')
@@ -86,6 +96,19 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
     void load()
     return () => { cancelled = true; if (timer) window.clearTimeout(timer) }
   }, [initData, projectId])
+
+  useEffect(() => {
+    if (project?.status !== 'ready' || project.feedback_submitted || feedbackSent) return
+    const dismissedUntil = Number(localStorage.getItem(`a2m_feedback_dismissed_until:${projectId}`) || 0)
+    if (dismissedUntil > Date.now()) return
+    const timer = window.setTimeout(() => {
+      setFeedbackVisible(true)
+      void trackProductEvent('feedback.prompt_shown', {
+        objectType: 'project', objectId: projectId, properties: { surface: 'project' },
+      })
+    }, 20_000)
+    return () => window.clearTimeout(timer)
+  }, [feedbackSent, project, projectId])
 
   const latest = project?.versions[0]
   const artifacts = useMemo(() => latest?.artifacts ?? [], [latest])
@@ -115,13 +138,25 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
       await sendProjectFeedback(projectId, {
         project_version_id: latest.version_id,
         rating: feedbackRating,
-        tags: [],
+        tags: [feedbackRating === 5 ? 'yes' : feedbackRating === 3 ? 'partly' : 'no'],
         comment: feedbackComment,
       })
       setFeedbackSent(true)
+      setFeedbackVisible(false)
     } catch {
       setError('Не удалось отправить отзыв. Попробуйте ещё раз.')
     }
+  }
+
+  function dismissFeedback() {
+    localStorage.setItem(
+      `a2m_feedback_dismissed_until:${projectId}`,
+      String(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    )
+    setFeedbackVisible(false)
+    void trackProductEvent('feedback.prompt_dismissed', {
+      objectType: 'project', objectId: projectId, properties: { surface: 'project' },
+    })
   }
 
   if (!project && !error) return <ProductLoading label="Открываем композицию…" />
@@ -183,7 +218,9 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
                 ) : <p>Аудиоверсия готовится или недоступна для этого результата.</p>}
                 {midi && (
                   <div className="workspace-actions">
-                    <a className="primary-action" href={visualizerUrl(midi.download_url)}>Открыть визуализацию</a>
+                    <a className="primary-action" href={visualizerUrl(midi.download_url)} onClick={() => void trackProductEvent('visualizer.opened', {
+                      objectType: 'project', objectId: project.id, properties: { engine: latest?.engine, surface: 'project' },
+                    })}>Открыть визуализацию</a>
                     {editorEnabled && <a className="secondary-action" href={`/editor/${project.id}`}>Редактировать</a>}
                   </div>
                 )}
@@ -225,27 +262,27 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
               {error && <p className="studio-error" role="alert">{error}</p>}
             </section>
 
-            <section className="project-section feedback-panel">
-              <div className="section-heading"><h2>Как получился результат?</h2></div>
+            {(feedbackVisible || feedbackSent) && <section className="project-section feedback-panel feedback-panel--inline">
+              <div className="section-heading"><h2>Получился результат, который вы хотели?</h2>{!feedbackSent && <button className="feedback-dismiss" aria-label="Скрыть вопрос" onClick={dismissFeedback} type="button">×</button>}</div>
               {feedbackSent ? <p className="feedback-thanks">Спасибо — это поможет улучшить следующие результаты.</p> : (
                 <>
-                  <div className="feedback-stars" aria-label="Оценка от 1 до 5">
-                    {[1, 2, 3, 4, 5].map((rating) => (
+                  <div className="feedback-choices" aria-label="Оценка результата">
+                    {[{ rating: 5, label: 'Да' }, { rating: 3, label: 'Частично' }, { rating: 1, label: 'Нет' }].map(({ rating, label }) => (
                       <button
                         aria-label={`${rating} из 5`}
                         aria-pressed={feedbackRating === rating}
-                        className={rating <= feedbackRating ? 'feedback-star feedback-star--active' : 'feedback-star'}
+                        className={feedbackRating === rating ? 'feedback-choice feedback-choice--active' : 'feedback-choice'}
                         key={rating}
                         onClick={() => setFeedbackRating(rating)}
                         type="button"
-                      >★</button>
+                      >{label}</button>
                     ))}
                   </div>
-                  <textarea maxLength={4000} onChange={(event) => setFeedbackComment(event.target.value)} placeholder="Что было хорошо или что стоит исправить?" value={feedbackComment} />
+                  <textarea maxLength={4000} onChange={(event) => setFeedbackComment(event.target.value)} placeholder="Если хотите, напишите одной фразой, чего не хватило…" value={feedbackComment} />
                   <button className="secondary-action" disabled={!feedbackRating} onClick={() => void submitFeedback()} type="button">Отправить отзыв</button>
                 </>
               )}
-            </section>
+            </section>}
           </>
         )}
       </div>

@@ -8,6 +8,7 @@ import {
   getReelCandidates,
   getReelsCapabilities,
   publishReelCandidate,
+  reviewReelRender,
   selectReelRender,
   updateReelRender,
   type ReelCandidate,
@@ -256,6 +257,8 @@ function ReelDetail({
   const [settings, setSettings] = useState<Record<string, string | number>>({})
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
+  const [reviewVerdict, setReviewVerdict] = useState<'good' | 'usable_with_edits' | 'bad'>('good')
+  const [reviewComment, setReviewComment] = useState('')
 
   const load = useCallback(async () => {
     setError('')
@@ -289,7 +292,10 @@ function ReelDetail({
       hook_text: selectedRender.settings.hook_text ?? '',
       cta_text: selectedRender.settings.cta_text ?? '',
     })
-  }, [selectedRender])
+    const review = candidate?.reviews.find((item) => item.render_id === selectedRender.id)
+    setReviewVerdict(review?.verdict ?? 'good')
+    setReviewComment(review?.comment ?? '')
+  }, [candidate?.reviews, selectedRender])
 
   async function action(name: string, task: () => Promise<void>) {
     setBusy(name)
@@ -386,7 +392,7 @@ function ReelDetail({
         </section>
 
         {selectedRender && (
-          <section className="reels-controls">
+          <><section className="reels-controls">
             <div>
               <p className="eyebrow">Fine tune</p>
               <h2>{VARIANT_LABELS[selectedRender.variant] ?? selectedRender.variant}</h2>
@@ -418,6 +424,14 @@ function ReelDetail({
               </button>
             </div>
           </section>
+          <section className="reels-controls reels-review-panel">
+            <div><p className="eyebrow">Human review</p><h2>Можно использовать этот ролик?</h2><p>Публикация доступна только после оценки «хорошо» или «можно после правок».</p></div>
+            <div className="reels-control-grid">
+              <label className="reels-wide-field"><span>Вердикт</span><select value={reviewVerdict} onChange={(event) => setReviewVerdict(event.target.value as typeof reviewVerdict)}><option value="good">Хорошо</option><option value="usable_with_edits">Можно после правок</option><option value="bad">Плохо</option></select></label>
+              <label className="reels-wide-field"><span>Комментарий</span><textarea maxLength={2000} value={reviewComment} onChange={(event) => setReviewComment(event.target.value)} placeholder="Коротко: что хорошо или что исправить…" /></label>
+              <button className="reels-primary reels-wide-field" disabled={Boolean(busy)} type="button" onClick={() => void action('review', () => reviewReelRender(selectedRender.id, { verdict: reviewVerdict, tags: [], comment: reviewComment }))}>{busy === 'review' ? 'Сохраняем…' : 'Сохранить оценку'}</button>
+            </div>
+          </section></>
         )}
 
         <section className="reels-publication-panel">
@@ -449,6 +463,7 @@ function ReelDetail({
                 Boolean(busy)
                 || !publishActionsEnabled
                 || !candidate.renders.some((render) => render.selected && render.status === 'ready')
+                || !candidate.reviews.some((review) => candidate.renders.some((render) => render.id === review.render_id && render.selected) && review.verdict !== 'bad')
               }
               type="button"
               onClick={() => void action('publish', () => publishReelCandidate(candidate.id))}

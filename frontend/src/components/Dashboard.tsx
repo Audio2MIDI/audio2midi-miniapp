@@ -156,7 +156,11 @@ function ResultRow({ item, editorEnabled }: { item: LibraryItem; editorEnabled: 
         <summary aria-label={`Действия: ${item.title}`}>•••</summary>
         <div className="result-menu__content">
           {primaryUrl && <a href={primaryUrl} onClick={opened}>Открыть композицию</a>}
-          {midi && <a href={visualizerUrl(midi.download_url)}>Открыть визуализацию</a>}
+          {midi && <a href={visualizerUrl(midi.download_url)} onClick={() => void trackProductEvent('visualizer.opened', {
+            objectType: item.source === 'job' ? 'job' : 'legacy_result',
+            objectId: item.id,
+            properties: { engine: item.engine, surface: 'library' },
+          })}>Открыть визуализацию</a>}
           {midi && editorEnabled && (
             <button disabled={openingEditor} onClick={() => void openEditor()} type="button">
               {openingEditor ? 'Открываем…' : 'Редактировать MIDI'}
@@ -220,6 +224,7 @@ export default function Dashboard({ initData, colorScheme, returnPath }: Dashboa
             notifications: notifications.items,
             analyticsRole: analytics?.role ?? null,
           })
+          void trackProductEvent('workspace.opened', { properties: { surface: 'library' } })
         }
       } catch (error) {
         if (cancelled) return
