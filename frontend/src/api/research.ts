@@ -1,5 +1,6 @@
 const BASE_URL = '/research-api/v1/research'
 const DEV_MOCK = import.meta.env.DEV
+  && typeof window !== 'undefined'
   && new URLSearchParams(window.location.search).get('mock') === '1'
 let mockCompleted = 7
 
@@ -10,7 +11,34 @@ export interface ResearchExperiment {
   track_count: number
   sample_count: number
   condition_count: number
-  card_count: number
+  card_count?: number
+  metadata?: string | { card_count?: number; kind?: string } | null
+}
+
+function researchExperimentMetadata(
+  experiment: ResearchExperiment,
+): { card_count?: number; kind?: string } | null {
+  let metadata = experiment.metadata
+  if (typeof metadata === 'string') {
+    try {
+      metadata = JSON.parse(metadata) as { card_count?: number; kind?: string }
+    } catch {
+      return null
+    }
+  }
+  return metadata ?? null
+}
+
+export function researchExperimentCardCount(experiment: ResearchExperiment): number {
+  if (typeof experiment.card_count === 'number') return experiment.card_count
+  const metadata = researchExperimentMetadata(experiment)
+  return metadata && typeof metadata.card_count === 'number'
+    ? metadata.card_count
+    : 0
+}
+
+export function researchExperimentKind(experiment: ResearchExperiment): string | undefined {
+  return researchExperimentMetadata(experiment)?.kind
 }
 
 export interface ResearchSample {
@@ -36,8 +64,10 @@ export interface ResearchComparison {
   card_id?: string
   block?: 'model' | 'corruption' | 'difficulty'
   question?: {
+    kind?: 'source_identity' | string
     prompt: string
     choices: Array<'left' | 'right' | 'tie' | 'both_bad'>
+    labels?: Partial<Record<'left' | 'right' | 'tie' | 'both_bad', string>>
   }
   track: {
     id: string
