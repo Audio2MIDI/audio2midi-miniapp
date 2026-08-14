@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 
 import { ApiError } from '../api/client'
-import { getAnalyticsBundle, type AnalyticsBundle } from '../api/analytics'
+import { getAnalyticsBundle, updateOutreachStatus, type AnalyticsBundle } from '../api/analytics'
 import { moscowDate } from '../analyticsDate'
 import { PageHeading, ProductHeader, ProductLoading, StatusBadge } from './ProductFrame'
 
@@ -12,6 +12,9 @@ const LABELS: Record<string, string> = {
   paywall_shown: 'Увидели оплату', checkout_started: 'Начали оплату', payment_succeeded: 'Оплатили', access_granted: 'Получили доступ',
   unknown_payment_channel_24h: 'Платежи без канала, 24 ч', paid_unfulfilled_30d: 'Оплачено без выдачи доступа', active_expired: 'Активная, но истёкшая подписка',
   renewal_without_binding: 'Автопродление без привязки', jobs_without_account_24h: 'Задачи без аккаунта, 24 ч', ready_not_delivered: 'Готово, но не доставлено', rollup_freshness: 'Свежесть агрегатов',
+  payment_status_regressions: 'Оплаты с ослабленным текущим статусом',
+  'workspace.opened': 'Открыли кабинет', 'project.opened': 'Открыли композицию', 'visualizer.opened': 'Открыли визуализатор',
+  'editor.opened': 'Открыли редактор', 'editor.draft_saved': 'Сохранили черновик', 'editor.version_published': 'Опубликовали версию',
 }
 
 function rub(kopecks: number) { return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(kopecks / 100) }
@@ -70,6 +73,31 @@ export default function AnalyticsDashboard({ colorScheme }: { colorScheme?: stri
             <dl className="quality-list">{Object.entries(data.dataQuality.statuses).map(([key, status]) => <div key={key}><dt>{LABELS[key] ?? key}</dt><dd className={`quality-${status}`}>{key === 'rollup_freshness' ? status === 'ok' ? 'Свежие' : 'Устарели' : data.dataQuality.checks[key] ?? 0}</dd></div>)}</dl>
           </section>
         </div>
+
+        <section className="analytics-section">
+          <header><div><p className="eyebrow">Поверхности</p><h2>Кабинет, визуализатор и редактор</h2></div><small>Ответили на вопрос: {data.surfaces.feedback.response_rate == null ? '—' : `${Math.round(data.surfaces.feedback.response_rate * 100)}%`}</small></header>
+          <div className="analytics-table-wrap"><table><thead><tr><th>Действие</th><th>Аккаунты</th><th>События</th><th>Активные дни</th></tr></thead><tbody>{data.surfaces.surfaces.filter((row) => !row.event_name.startsWith('feedback.')).map((row) => <tr key={row.event_name}><td>{LABELS[row.event_name] ?? row.event_name}</td><td>{row.unique_accounts}</td><td>{row.events}</td><td>{row.active_days}</td></tr>)}</tbody></table></div>
+          <ol className="surface-funnel" aria-label="Воронка веб-продукта">
+            {Object.entries(data.surfaces.funnel).map(([stage, count]) => <li key={stage}><span>{stage}</span><strong>{count}</strong></li>)}
+          </ol>
+        </section>
+
+        {data.role === 'owner' && data.outreach && <section className="analytics-section">
+          <header><div><p className="eyebrow">Исследования</p><h2>Кандидаты на личный вопрос</h2></div><small>Сообщения не отправляются автоматически</small></header>
+          <div className="analytics-table-wrap"><table><thead><tr><th>Telegram</th><th>Когорта</th><th>Баллы</th><th>Статус</th><th /></tr></thead><tbody>{data.outreach.items.map((item) => <tr key={item.id}><td>{item.telegram_username ? `@${item.telegram_username}` : '—'}</td><td>{item.cohort}</td><td>{item.score}</td><td>{item.status}</td><td>{item.status === 'candidate' && <button className="text-action" type="button" onClick={() => void updateOutreachStatus(item.id, 'approved').then(() => window.location.reload())}>Одобрить</button>}</td></tr>)}</tbody></table></div>
+          <p className="outreach-template"><strong>Шаблон после финального согласования:</strong> {data.outreach.message_template}</p>
+        </section>}
+
+        <section className="analytics-section">
+          <header><div><p className="eyebrow">Reels Studio</p><h2>Автоматическая генерация и ручная оценка</h2></div></header>
+          <div className="analytics-kpis analytics-kpis--compact">
+            <div><span>Генерации</span><strong>{data.reels.totals.generations}</strong><small>{data.reels.totals.generation_pass} прошли QA</small></div>
+            <div><span>Готовые рендеры</span><strong>{data.reels.totals.ready_renders}</strong><small>{data.reels.totals.selected_renders} выбраны</small></div>
+            <div><span>Ошибки инфраструктуры</span><strong>{data.reels.totals.infra_failures}</strong><small>не творческая отбраковка</small></div>
+            <div><span>Публикации</span><strong>{data.reels.totals.published}</strong><small>{data.reels.totals.views} просмотров</small></div>
+          </div>
+          <div className="verdict-line">{data.reels.totals.human_verdicts.length ? data.reels.totals.human_verdicts.map((item) => <span key={item.verdict}><strong>{item.count}</strong> {item.verdict}</span>) : <span>Ручных оценок пока нет.</span>}</div>
+        </section>
 
         <section className="analytics-section">
           <header><div><p className="eyebrow">Деньги</p><h2>Оплаты по дням и каналам</h2></div></header>

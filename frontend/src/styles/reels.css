@@ -364,7 +364,9 @@
   font-size: 11px;
 }
 
-.reels-control-grid input {
+.reels-control-grid input,
+.reels-control-grid select,
+.reels-control-grid textarea {
   width: 100%;
   border: 1px solid rgb(255 255 255 / 12%);
   border-radius: 9px;
@@ -373,6 +375,8 @@
   background: #0d1014;
   font: inherit;
 }
+.reels-control-grid textarea { min-height: 92px; resize: vertical; }
+.reels-review-panel { margin-top: 18px; border-top: 1px solid rgb(255 255 255 / 10%); }
 
 .reels-wide-field {
   grid-column: 1 / -1;

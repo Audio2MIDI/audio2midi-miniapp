@@ -83,6 +83,15 @@ export interface ReelPublication {
   published_at: string | null
 }
 
+export interface ReelReview {
+  id: string
+  render_id: string
+  verdict: 'good' | 'usable_with_edits' | 'bad'
+  tags: string[]
+  comment: string
+  updated_at: string
+}
+
 export interface ReelCandidate extends ReelCandidateSummary {
   campaign_code: string
   fragment_start_seconds: number | null
@@ -92,6 +101,7 @@ export interface ReelCandidate extends ReelCandidateSummary {
   generations: ReelGeneration[]
   renders: ReelRender[]
   publications: ReelPublication[]
+  reviews: ReelReview[]
 }
 
 export async function getReelsCapabilities(): Promise<ReelsCapabilities> {
@@ -137,6 +147,13 @@ export async function cancelReelCandidate(candidateId: string): Promise<void> {
 
 export async function publishReelCandidate(candidateId: string): Promise<void> {
   await post(`/v1/internal/reels/candidates/${candidateId}/publish-now`)
+}
+
+export async function reviewReelRender(
+  renderId: string,
+  input: { verdict: 'good' | 'usable_with_edits' | 'bad'; tags: string[]; comment: string },
+): Promise<void> {
+  await post(`/v1/internal/reels/renders/${renderId}/review`, input)
 }
 
 export function currentCampaignCode(): string | null {

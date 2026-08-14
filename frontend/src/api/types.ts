@@ -282,6 +282,7 @@ export interface ProjectDetail {
   source_size_bytes: number | null;
   source_mime_type: string | null;
   created_at: string;
+  feedback_submitted: boolean;
   versions: ProjectVersion[];
 }
 

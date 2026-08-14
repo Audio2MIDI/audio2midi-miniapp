@@ -82,6 +82,16 @@
 .analytics-kpis span,
 .analytics-kpis small { display: block; color: var(--product-muted); font-size: 12px; letter-spacing: .01em; }
 .analytics-kpis strong { display: block; margin: 8px 0 5px; font-size: clamp(26px, 3vw, 38px); font-weight: 500; line-height: 1; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+.analytics-kpis--compact { margin: 0; }
+.analytics-kpis--compact strong { font-size: clamp(22px, 2vw, 30px); }
+.surface-funnel { display: flex; flex-wrap: wrap; gap: 0; margin: 18px 0 0; padding: 0; border-block: 1px solid var(--product-border); list-style: none; }
+.surface-funnel li { display: flex; min-width: 150px; flex: 1; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-right: 1px solid var(--product-border); }
+.surface-funnel span { color: var(--product-muted); font-size: 11px; text-transform: uppercase; }
+.surface-funnel strong { font-variant-numeric: tabular-nums; }
+.verdict-line { display: flex; flex-wrap: wrap; gap: 18px; padding-top: 14px; color: var(--product-muted); font-size: 12px; }
+.verdict-line strong { color: var(--product-text); }
+.outreach-template { max-width: 880px; margin: 16px 0 0; color: var(--product-muted); font-size: 12px; line-height: 1.65; }
+.outreach-template strong { color: var(--product-text); }
 
 .analytics-grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(320px, .8fr); gap: 38px; }
 .analytics-section { margin-bottom: 44px; }
@@ -1467,6 +1477,40 @@
 
 .feedback-star--active {
   color: #facc15 !important;
+}
+
+.feedback-panel--inline {
+  position: relative;
+  padding: 22px;
+  border: 1px solid var(--product-border-strong);
+  border-radius: 10px;
+  background: var(--product-surface);
+}
+
+.feedback-panel--inline .section-heading { align-items: center; }
+.feedback-choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.feedback-choice {
+  min-height: 42px;
+  padding: 0 18px;
+  border: 1px solid var(--product-border-strong);
+  border-radius: 7px;
+  color: var(--product-text);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.feedback-choice--active { border-color: var(--product-blue-hover); background: rgba(37, 99, 235, .16); }
+.feedback-choice:focus-visible,
+.feedback-dismiss:focus-visible { outline: 2px solid rgba(37, 99, 235, .65); outline-offset: 2px; }
+.feedback-dismiss {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  color: var(--product-muted);
+  background: transparent;
+  font-size: 24px;
+  cursor: pointer;
 }
 
 /* Billing, profile, support */
