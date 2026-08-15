@@ -127,6 +127,29 @@
   transition: width 220ms ease;
 }
 
+.research-audit-note {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 18px;
+  padding: 18px 20px;
+  border: 1px solid rgba(37, 99, 235, 0.34);
+  border-radius: 14px;
+  background: rgba(37, 99, 235, 0.09);
+}
+
+.research-audit-note strong {
+  color: #dce7ff;
+  font-size: 13px;
+}
+
+.research-audit-note p {
+  max-width: 760px;
+  margin: 0;
+  color: #aeb6c8;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .research-source,
 .research-track-nav,
 .research-variant,
@@ -292,6 +315,18 @@
   font-weight: 400;
 }
 
+.research-variant__title .research-variant__heading {
+  display: block;
+  width: auto;
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
 .research-variant audio {
   width: 100%;
 }
@@ -380,6 +415,14 @@
   margin-top: 18px;
   padding: clamp(28px, 4vw, 48px);
   border-radius: 26px;
+}
+
+.research-variants--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.research-variants--single .research-variant {
+  width: 100%;
 }
 
 .research-question h2 {
@@ -518,6 +561,25 @@
   border-color: rgba(228, 134, 58, 0.6);
   color: #ffd5ad;
   background: rgba(184, 92, 22, 0.18);
+}
+
+.research-wrong-song {
+  width: 100%;
+  margin-top: 12px;
+  border: 1px solid rgba(255, 122, 122, 0.42);
+  border-radius: 12px;
+  padding: 11px 14px;
+  color: #ffb4b4;
+  background: rgba(126, 28, 28, 0.12);
+  font: inherit;
+  cursor: pointer;
+}
+
+.research-vote-saved {
+  margin: 10px 0 0;
+  color: #9ae6b4;
+  font-size: 12px;
+  text-align: center;
 }
 
 .research-details textarea {
@@ -746,7 +808,13 @@
 
   .research-header {
     align-items: flex-start;
+    gap: 12px;
     margin-bottom: 60px;
+  }
+
+  .research-header__actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 
   .research-brand {
