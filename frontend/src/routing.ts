@@ -6,6 +6,11 @@ export interface TelegramStartRoute {
   returnPath: string | null
 }
 
+export function paymentReturnIntent(search: string): string | null {
+  const params = new URLSearchParams(search)
+  return params.get('intent') ?? params.get('Shp_intent')
+}
+
 export function safeEditorReturnPath(
   candidate: string | null | undefined,
   origin?: string,

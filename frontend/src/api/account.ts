@@ -17,6 +17,7 @@ import type {
   ProjectSubmitResponse,
   ProjectUploadResponse,
   SessionsResponse,
+  PaymentProvider,
   SubscriptionPeriod,
 } from './types'
 
@@ -101,10 +102,11 @@ export async function getBillingPlans(): Promise<BillingPlansResponse> {
 export async function createBillingCheckout(
   period: SubscriptionPeriod,
   idempotencyKey: string,
+  provider: PaymentProvider = 'tbank',
 ): Promise<BillingCheckoutResponse> {
   return post<BillingCheckoutResponse>(
     '/v1/me/billing/checkout',
-    { period, recurring_consent: false },
+    { period, recurring_consent: false, provider },
     { headers: { 'Idempotency-Key': idempotencyKey } },
   )
 }

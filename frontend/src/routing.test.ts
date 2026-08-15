@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   parseTelegramStartParam,
+  paymentReturnIntent,
   safeEditorReturnPath,
   telegramLoginUrl,
 } from './routing'
@@ -55,5 +56,20 @@ describe('Telegram start parameters', () => {
       midiParam: 'legacy-result',
       returnPath: null,
     })
+  })
+})
+
+describe('payment return routing', () => {
+  it('accepts both T-Bank and Robokassa intent parameters', () => {
+    expect(paymentReturnIntent('?intent=tbank-intent')).toBe('tbank-intent')
+    expect(paymentReturnIntent('?Shp_intent=robokassa-intent')).toBe(
+      'robokassa-intent',
+    )
+  })
+
+  it('prefers the canonical intent parameter during mixed rollouts', () => {
+    expect(paymentReturnIntent('?intent=canonical&Shp_intent=provider')).toBe(
+      'canonical',
+    )
   })
 })

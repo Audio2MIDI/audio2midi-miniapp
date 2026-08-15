@@ -9,6 +9,8 @@ import { ApiError } from '../api/client'
 import type {
   AccountSummary,
   BillingPlan,
+  BillingProvider,
+  PaymentProvider,
   SubscriptionPeriod,
 } from '../api/types'
 import EmailAuthForm from './EmailAuthForm'
@@ -20,7 +22,13 @@ interface BillingProps {
 type BillingState =
   | { kind: 'loading' }
   | { kind: 'signed-out' }
-  | { kind: 'ready'; account: AccountSummary; plans: BillingPlan[]; enabled: boolean; recurring: boolean }
+  | {
+    kind: 'ready'
+    account: AccountSummary
+    plans: BillingPlan[]
+    providers: BillingProvider[]
+    enabled: boolean
+  }
   | { kind: 'error'; message: string }
 
 function accessActive(account: AccountSummary): boolean {
@@ -41,6 +49,7 @@ function formatDate(value: string): string {
 export default function Billing({ colorScheme }: BillingProps) {
   const [state, setState] = useState<BillingState>({ kind: 'loading' })
   const [selectedPeriod, setSelectedPeriod] = useState<SubscriptionPeriod>('month')
+  const [selectedProvider, setSelectedProvider] = useState<PaymentProvider>('tbank')
   const [consent, setConsent] = useState(false)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
@@ -57,9 +66,18 @@ export default function Billing({ colorScheme }: BillingProps) {
         kind: 'ready',
         account: account.account,
         plans: billing.plans,
+        providers: billing.providers?.length
+          ? billing.providers
+          : [{ id: 'tbank', title: 'Карта РФ / СБП', recurring: billing.recurring_enabled }],
         enabled: billing.enabled,
-        recurring: billing.recurring_enabled,
       })
+      if (billing.providers?.length) {
+        setSelectedProvider((current) => (
+          billing.providers.some((provider) => provider.id === current)
+            ? current
+            : billing.providers[0].id
+        ))
+      }
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         setState({ kind: 'signed-out' })
@@ -84,15 +102,20 @@ export default function Billing({ colorScheme }: BillingProps) {
       : undefined,
     [selectedPeriod, state],
   )
+  const provider = state.kind === 'ready'
+    ? state.providers.find((item) => item.id === selectedProvider) ?? state.providers[0]
+    : undefined
+  const recurring = Boolean(provider?.recurring)
 
   async function checkout() {
-    if (!selectedPlan || state.kind !== 'ready' || (state.recurring && !consent)) return
+    if (!selectedPlan || !provider || state.kind !== 'ready' || (recurring && !consent)) return
     setBusy(true)
     setMessage('')
     try {
       const result = await createBillingCheckout(
         selectedPlan.period,
         checkoutKey,
+        provider.id,
       )
       if (!result.payment_url) {
         if (result.intent.status === 'paid') {
@@ -204,13 +227,50 @@ export default function Billing({ colorScheme }: BillingProps) {
                 <strong>{selectedPlan.price_rub.toLocaleString('ru-RU')} ₽</strong>
               </div>
               <p>
-                {state.recurring
+                {recurring
                   ? `Далее — ${selectedPlan.price_rub.toLocaleString('ru-RU')} ₽ ${selectedPlan.cadence}, пока вы не отмените подписку.`
                   : `Разовая покупка доступа на ${selectedPlan.title.toLowerCase()}. Автоматических списаний нет.`}
               </p>
             </div>
 
-            {state.recurring && <label className="billing-consent">
+            {state.providers.length > 1 && (
+              <fieldset className="billing-provider-picker">
+                <legend>Способ оплаты</legend>
+                <div className="billing-provider-options">
+                  {state.providers.map((item) => (
+                    <label
+                      className={item.id === selectedProvider
+                        ? 'billing-provider billing-provider--selected'
+                        : 'billing-provider'}
+                      key={item.id}
+                    >
+                      <input
+                        checked={item.id === selectedProvider}
+                        name="payment-provider"
+                        onChange={() => {
+                          setSelectedProvider(item.id)
+                          setConsent(false)
+                          setMessage('')
+                          setCheckoutKey(`web-${crypto.randomUUID()}`)
+                        }}
+                        type="radio"
+                        value={item.id}
+                      />
+                      <span>
+                        <strong>{item.title}</strong>
+                        <small>
+                          {item.id === 'robokassa'
+                            ? 'Visa, Mastercard и UnionPay зарубежных банков'
+                            : 'Российская карта или СБП'}
+                        </small>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            )}
+
+            {recurring && <label className="billing-consent">
               <input
                 checked={consent}
                 onChange={(event) => setConsent(event.target.checked)}
@@ -227,7 +287,7 @@ export default function Billing({ colorScheme }: BillingProps) {
 
             <button
               className="primary-action billing-pay-button"
-              disabled={(state.recurring && !consent) || busy || !state.enabled}
+              disabled={(recurring && !consent) || busy || !state.enabled}
               onClick={() => void checkout()}
               type="button"
             >
@@ -238,7 +298,8 @@ export default function Billing({ colorScheme }: BillingProps) {
             )}
             {message && <p className="billing-message billing-message--error">{message}</p>}
             <p className="billing-security">
-              Данные карты вводятся на защищённой странице Т‑Банка и не попадают на сервер Audio2MIDI.
+              Данные карты вводятся на защищённой странице{' '}
+              {provider?.id === 'robokassa' ? 'Robokassa' : 'Т‑Банка'} и не попадают на сервер Audio2MIDI.
             </p>
           </section>
         )}

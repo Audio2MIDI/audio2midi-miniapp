@@ -127,6 +127,13 @@ export interface SessionsResponse {
 }
 
 export type SubscriptionPeriod = 'day' | 'week' | 'month' | 'year';
+export type PaymentProvider = 'tbank' | 'robokassa';
+
+export interface BillingProvider {
+  id: PaymentProvider;
+  title: string;
+  recurring: boolean;
+}
 
 export interface BillingPlan {
   period: SubscriptionPeriod;
@@ -139,6 +146,7 @@ export interface BillingPlan {
 export interface BillingPlansResponse {
   enabled: boolean;
   recurring_enabled: boolean;
+  providers: BillingProvider[];
   currency: 'RUB';
   consent_version: string;
   plans: BillingPlan[];
@@ -148,6 +156,7 @@ export interface WebPaymentIntent {
   id: string;
   period: SubscriptionPeriod;
   amount_kopek: number;
+  payment_provider?: PaymentProvider;
   status: 'initializing' | 'ready' | 'processing' | 'paid' | 'failed' | 'cancelled';
   provider_status: string | null;
   provider_success: boolean | null;
