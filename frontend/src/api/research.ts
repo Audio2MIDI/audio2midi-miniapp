@@ -218,11 +218,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
             card_id: 'source-audit-preview-1',
             question: {
               kind: 'source_identity',
-              prompt: 'Это фортепианная версия той же композиции, что и оригинал выше?',
+              prompt: 'Во втором плеере действительно звучит фортепианная версия композиции из первого?',
               choices: ['left', 'right', 'tie', 'both_bad'],
               labels: {
-                left: 'Да, пара верная',
-                right: 'Нет, это другая песня',
+                left: 'Да, это фортепианная версия',
+                right: 'Нет, это оригинал или другая песня',
                 tie: 'Не уверен',
                 both_bad: 'Файлы не прослушать',
               },

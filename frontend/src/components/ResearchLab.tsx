@@ -772,14 +772,14 @@ export default function ResearchLab() {
                 <h2>
                   {comparison.question?.prompt
                     ?? (sourceIdentityAudit
-                      ? 'Это фортепианная версия той же композиции, что и оригинал выше?'
+                      ? 'Во втором плеере действительно звучит фортепианная версия композиции из первого?'
                       : 'Какой вариант лучше работает как фортепианный кавер?')}
                 </h2>
               </div>
               <div className="research-votes">
                 <button onClick={() => void vote('left')} disabled={state === 'submitting'}>
                   {!sourceIdentityAudit && <kbd>A</kbd>} {comparison.question?.labels?.left
-                    ?? (sourceIdentityAudit ? 'Да, это одна песня' : 'Вариант A')}
+                  ?? (sourceIdentityAudit ? 'Да, это фортепианная версия' : 'Вариант A')}
                 </button>
                 <button onClick={() => void vote('tie')} disabled={state === 'submitting'}>
                   {!sourceIdentityAudit && <kbd>T</kbd>} {comparison.question?.labels?.tie
@@ -787,7 +787,7 @@ export default function ResearchLab() {
                 </button>
                 <button onClick={() => void vote('right')} disabled={state === 'submitting'}>
                   {!sourceIdentityAudit && <kbd>B</kbd>} {comparison.question?.labels?.right
-                    ?? (sourceIdentityAudit ? 'Нет, это другая песня' : 'Вариант B')}
+                  ?? (sourceIdentityAudit ? 'Нет, это оригинал или другая песня' : 'Вариант B')}
                 </button>
                 <button
                   className="research-vote--bad"
