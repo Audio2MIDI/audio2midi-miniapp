@@ -34,7 +34,12 @@ function App() {
   const queryReturnPath = safeEditorReturnPath(new URLSearchParams(window.location.search).get('next'))
   const returnPath = queryReturnPath ?? telegramReturnPath
 
-  if (window.location.pathname.startsWith('/research/listening')) return route(<ResearchLab />)
+  if (
+    window.location.pathname.startsWith('/research/listening')
+    || window.location.pathname.startsWith('/research/review')
+  ) {
+    return route(<ResearchLab initData={initData} colorScheme={colorScheme} />)
+  }
   if (window.location.pathname === '/support') return route(<Support colorScheme={colorScheme} />)
   if (window.location.pathname === '/billing') return route(<Billing colorScheme={colorScheme} />)
   if (window.location.pathname === '/payment/return') {
