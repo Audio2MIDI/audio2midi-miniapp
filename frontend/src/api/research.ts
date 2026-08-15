@@ -1,9 +1,24 @@
-const BASE_URL = '/research-api/v1/research'
+const DESKTOP_BASE_URL = '/research-api/v1/research'
+const TELEGRAM_BASE_URL = '/api/v1/research'
 const DEV_MOCK_MODE = import.meta.env.DEV && typeof window !== 'undefined'
   ? new URLSearchParams(window.location.search).get('mock')
   : null
 const DEV_MOCK = DEV_MOCK_MODE === '1' || DEV_MOCK_MODE === 'source-audit'
 let mockCompleted = 7
+
+function telegramInitData(): string | null {
+  if (typeof window === 'undefined') return null
+  const telegram = (window as unknown as {
+    Telegram?: { WebApp?: { initData?: string } }
+  }).Telegram
+  return telegram?.WebApp?.initData ?? null
+}
+
+export function researchApiBaseUrl(
+  initData: string | null = telegramInitData(),
+): string {
+  return initData ? TELEGRAM_BASE_URL : DESKTOP_BASE_URL
+}
 
 export interface ResearchExperiment {
   id: string
@@ -328,7 +343,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
   }
 
-  const response = await fetch(`${BASE_URL}${path}`, {
+  const response = await fetch(`${researchApiBaseUrl()}${path}`, {
     credentials: 'same-origin',
     ...init,
     headers: {

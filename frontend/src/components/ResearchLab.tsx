@@ -9,6 +9,7 @@ import {
   researchExperimentKind,
   submitResearchVote,
 } from '../api/research'
+import { authenticateWithTelegram } from '../api/account'
 import type {
   ResearchComparison,
   ResearchExperiment,
@@ -60,6 +61,11 @@ type CalibrationBlock = 'model' | 'corruption' | 'difficulty'
 type LoadState = 'loading' | 'ready' | 'submitting' | 'error'
 type VariantSide = 'left' | 'right'
 type VariantRatings = Record<VariantSide, Record<string, number>>
+
+interface ResearchLabProps {
+  initData: string | null
+  colorScheme: 'light' | 'dark'
+}
 
 function emptyRatings(): VariantRatings {
   return { left: {}, right: {} }
@@ -258,7 +264,7 @@ function ResultsView({ results }: { results: ResearchResults }) {
   )
 }
 
-export default function ResearchLab() {
+export default function ResearchLab({ initData, colorScheme }: ResearchLabProps) {
   const [experiments, setExperiments] = useState<ResearchExperiment[]>([])
   const [experimentId, setExperimentId] = useState('')
   const [tracks, setTracks] = useState<ResearchTrack[]>([])
@@ -299,6 +305,7 @@ export default function ResearchLab() {
     || (activeExperiment
       ? researchExperimentKind(activeExperiment) === 'source_identity_audit'
       : false)
+  const telegramMode = Boolean(initData)
 
   const loadNext = useCallback(async (
     id: string,
@@ -338,6 +345,14 @@ export default function ResearchLab() {
   useEffect(() => {
     async function load() {
       try {
+        if (initData) {
+          const authentication = await authenticateWithTelegram(initData)
+          if ('merge_required' in authentication && authentication.merge_required) {
+            throw new Error(
+              'Не удалось открыть разметку: требуется повторный вход в Audio2MIDI',
+            )
+          }
+        }
         const items = await listResearchExperiments()
         setExperiments(items)
         const first = items[0]
@@ -367,7 +382,12 @@ export default function ResearchLab() {
       }
     }
     void load()
-  }, [loadNext, refreshTracks])
+  }, [initData, loadNext, refreshTracks])
+
+  useEffect(() => {
+    if (!telegramMode) return
+    document.title = 'Audio2MIDI — разметка'
+  }, [telegramMode])
 
   const pauseOtherPlayers = useCallback((element: HTMLAudioElement) => {
     if (activeAudio.current && activeAudio.current !== element) {
@@ -539,7 +559,10 @@ export default function ResearchLab() {
     : 0
 
   return (
-    <main className="research-shell">
+    <main
+      className={`research-shell${telegramMode ? ' research-shell--telegram' : ''}`}
+      data-theme={colorScheme}
+    >
       <div className="research-container">
         <header className="research-header">
           <a href="https://audio2midi.ru" className="research-brand">Audio2MIDI</a>
@@ -570,11 +593,15 @@ export default function ResearchLab() {
         </header>
 
         <section className="research-intro">
-          <p>INTERNAL LISTENING LAB</p>
+          <p>{telegramMode ? 'ПРИВАТНАЯ РАЗМЕТКА' : 'INTERNAL LISTENING LAB'}</p>
           <h1>
-            {sourceIdentityAudit
-              ? <>Проверяем данные,<br />а не модель.</>
-              : <>Слушаем модель,<br />а не её название.</>}
+            {telegramMode
+              ? sourceIdentityAudit
+                ? 'Проверка исходников'
+                : 'Сравнение аранжировок'
+              : sourceIdentityAudit
+                ? <>Проверяем данные,<br />а не модель.</>
+                : <>Слушаем модель,<br />а не её название.</>}
           </h1>
           <div className="research-intro__meta">
             <span>{activeExperiment?.title ?? 'Загрузка эксперимента'}</span>

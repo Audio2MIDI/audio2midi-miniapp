@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { researchExperimentCardCount, researchExperimentKind } from '../api/research'
+import {
+  researchApiBaseUrl,
+  researchExperimentCardCount,
+  researchExperimentKind,
+} from '../api/research'
 import { isSourceIdentityQuestion, withWrongSongTag } from './researchVote'
 
 describe('withWrongSongTag', () => {
@@ -49,5 +53,12 @@ describe('researchExperimentKind', () => {
       metadata: JSON.stringify({ kind: 'source_identity_audit', card_count: 30 }),
     }
     expect(researchExperimentKind(experiment)).toBe('source_identity_audit')
+  })
+})
+
+describe('researchApiBaseUrl', () => {
+  it('uses the public account API inside Telegram and keeps the gateway on desktop', () => {
+    expect(researchApiBaseUrl(null)).toBe('/research-api/v1/research')
+    expect(researchApiBaseUrl('signed-telegram-data')).toBe('/api/v1/research')
   })
 })

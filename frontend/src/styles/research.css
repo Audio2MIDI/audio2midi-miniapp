@@ -888,4 +888,168 @@
     align-items: stretch;
     flex-direction: column;
   }
+
+  .research-shell--telegram {
+    --research-bg: #08090a;
+    --research-panel: #141516;
+    --research-border: #2d2e31;
+    --research-muted: #8a8f98;
+    --research-text: #f7f8f8;
+
+    background: var(--research-bg);
+  }
+
+  .research-shell--telegram::before {
+    display: none;
+  }
+
+  .research-shell--telegram .research-container {
+    width: calc(100% - 16px);
+    padding: 10px 0 calc(24px + env(safe-area-inset-bottom));
+  }
+
+  .research-shell--telegram .research-header {
+    align-items: center;
+    margin-bottom: 22px;
+  }
+
+  .research-shell--telegram .research-brand {
+    font-size: 20px;
+    font-weight: 500;
+  }
+
+  .research-shell--telegram .research-header__actions {
+    display: none;
+  }
+
+  .research-shell--telegram .research-intro {
+    margin-bottom: 18px;
+  }
+
+  .research-shell--telegram .research-intro > p {
+    margin-bottom: 8px;
+    color: var(--research-muted);
+    letter-spacing: 0.16em;
+  }
+
+  .research-shell--telegram .research-intro h1,
+  .research-shell--telegram .research-source h2,
+  .research-shell--telegram .research-question h2 {
+    font-family: "Montserrat Variable", Montserrat, Arial, sans-serif;
+    font-weight: 500;
+    letter-spacing: -0.025em;
+  }
+
+  .research-shell--telegram .research-intro h1 {
+    font-size: 30px;
+    line-height: 1.08;
+  }
+
+  .research-shell--telegram .research-intro__meta {
+    gap: 5px;
+    margin-top: 14px;
+  }
+
+  .research-shell--telegram .research-progress {
+    height: 4px;
+    margin-top: 10px;
+    border-radius: 999px;
+  }
+
+  .research-shell--telegram .research-progress span {
+    border-radius: inherit;
+    background: var(--research-blue);
+  }
+
+  .research-shell--telegram .research-audit-note,
+  .research-shell--telegram .research-source,
+  .research-shell--telegram .research-variant,
+  .research-shell--telegram .research-review,
+  .research-shell--telegram .research-complete {
+    border-radius: 12px;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  .research-shell--telegram .research-audit-note {
+    margin-bottom: 10px;
+    padding: 13px 14px;
+  }
+
+  .research-shell--telegram .research-audit-note p {
+    line-height: 1.45;
+  }
+
+  .research-shell--telegram .research-source,
+  .research-shell--telegram .research-variant {
+    gap: 14px;
+    padding: 16px;
+  }
+
+  .research-shell--telegram .research-source h2 {
+    font-size: 21px;
+  }
+
+  .research-shell--telegram .research-variants {
+    gap: 10px;
+    margin-top: 10px;
+  }
+
+  .research-shell--telegram .research-variant__title {
+    margin-bottom: 14px;
+  }
+
+  .research-shell--telegram .research-pianoroll {
+    margin-top: 14px;
+  }
+
+  .research-shell--telegram .research-pianoroll__preview img {
+    height: 160px;
+  }
+
+  .research-shell--telegram .research-review {
+    margin-top: 10px;
+    padding: 18px 14px 14px;
+  }
+
+  .research-shell--telegram .research-question h2 {
+    font-size: 22px;
+    line-height: 1.2;
+  }
+
+  .research-shell--telegram .research-votes {
+    gap: 8px;
+    margin: 18px -6px 0;
+    padding: 6px;
+    border: 1px solid var(--research-border);
+    border-radius: 14px;
+    background: rgba(8, 9, 10, 0.96);
+    backdrop-filter: blur(14px);
+  }
+
+  .research-shell--telegram .research-votes button {
+    min-height: 58px;
+    padding: 10px;
+    border-radius: 10px;
+    font-size: 12px;
+    line-height: 1.25;
+    touch-action: manipulation;
+  }
+
+  .research-shell--telegram .research-votes button:first-child {
+    border-color: rgba(37, 99, 235, 0.6);
+    background: rgba(37, 99, 235, 0.18);
+  }
+
+  .research-shell--telegram .research-details {
+    margin-top: 18px;
+    padding-top: 16px;
+  }
+
+  .research-shell--telegram button:focus-visible,
+  .research-shell--telegram a:focus-visible,
+  .research-shell--telegram summary:focus-visible {
+    outline: 2px solid #60a5fa;
+    outline-offset: 2px;
+  }
 }
