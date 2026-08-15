@@ -4,6 +4,16 @@ export type AnalyticsRole = 'owner' | 'analyst'
 export type AnalyticsChannel = 'telegram' | 'web' | 'recurring' | 'admin' | 'legacy_unknown'
 
 export interface AnalyticsRange { from: string; to: string }
+export interface AnalyticsSourceStats {
+  events: number
+  accounts: number
+  processing_submitted: number
+  results_available: number
+  processing_failed: number
+  first_event_at: string | null
+  last_event_at: string | null
+  tasks: number
+}
 export interface AnalyticsOverview {
   range: AnalyticsRange
   totals: {
@@ -16,6 +26,11 @@ export interface AnalyticsOverview {
     revenue_kopek: number
     paying_accounts: number
     active_paid_accounts: number
+  }
+  source_breakdown: {
+    live_user: AnalyticsSourceStats
+    backfill: AnalyticsSourceStats
+    internal: AnalyticsSourceStats
   }
   data_freshness: { refreshed_through: string | null; updated_at: string | null }
 }

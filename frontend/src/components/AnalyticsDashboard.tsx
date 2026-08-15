@@ -19,6 +19,7 @@ const LABELS: Record<string, string> = {
 
 function rub(kopecks: number) { return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(kopecks / 100) }
 function pct(value: number, total: number) { return total ? `${Math.round((value / total) * 100)}%` : '—' }
+function coverage(value: string | null) { return value ? new Date(value).toLocaleString('ru-RU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' }) : 'данных нет' }
 
 export default function AnalyticsDashboard({ colorScheme }: { colorScheme?: string }) {
   const [from, setFrom] = useState(moscowDate(-6))
@@ -56,11 +57,39 @@ export default function AnalyticsDashboard({ colorScheme }: { colorScheme?: stri
           <label>Канал <select value={channel} onChange={(event) => { setState({ kind: 'loading' }); setChannel(event.target.value) }}><option value="">Все</option><option value="telegram">Telegram</option><option value="web">Веб</option><option value="recurring">Автопродление</option><option value="admin">Вручную</option></select></label>
         </form>
 
-        <section className="analytics-kpis" aria-label="Главные показатели">
+        <div className="analytics-live-heading">
+          <div><p className="eyebrow"><span className="analytics-live-dot" />Live-данные</p><h2>Реальные действия пользователей</h2></div>
+          <p>Активность, воронка и retention ниже не включают исторический backfill и служебные задачи. Оплаты считаются отдельно по банковскому реестру.</p>
+        </div>
+        <section className="analytics-kpis" aria-label="Главные показатели по живым пользовательским событиям">
           <div><span>Активные пользователи</span><strong>{data.overview.totals.active_accounts}</strong><small>получили готовый результат</small></div>
           <div><span>Готовые результаты</span><strong>{data.overview.totals.results_available}</strong><small>из {data.overview.totals.processing_submitted} запусков</small></div>
           <div><span>Выручка</span><strong>{rub(data.overview.totals.revenue_kopek)}</strong><small>{data.overview.totals.confirmed_payments} подтверждённых оплат</small></div>
           <div><span>Платящие аккаунты</span><strong>{data.overview.totals.paying_accounts}</strong><small>{data.overview.totals.active_paid_accounts} с активным доступом</small></div>
+        </section>
+
+        <section className="analytics-source-section" aria-labelledby="analytics-source-title">
+          <header><div><p className="eyebrow">Контур данных</p><h2 id="analytics-source-title">Что именно попало в расчёт</h2></div><small>За выбранный период{channel ? ' и канал' : ''}</small></header>
+          <div className="analytics-source-grid">
+            <article className="analytics-source-card analytics-source-card--live">
+              <div><span className="analytics-source-status">В главных показателях</span><h3>Живые события</h3></div>
+              <strong>{data.overview.source_breakdown.live_user.events}</strong>
+              <p>{data.overview.source_breakdown.live_user.accounts} аккаунтов · {data.overview.source_breakdown.live_user.results_available} готовых результатов</p>
+              <small>Последнее: {coverage(data.overview.source_breakdown.live_user.last_event_at)}</small>
+            </article>
+            <article className="analytics-source-card">
+              <div><span className="analytics-source-status">Показано отдельно</span><h3>Исторический backfill</h3></div>
+              <strong>{data.overview.source_breakdown.backfill.events}</strong>
+              <p>{data.overview.source_breakdown.backfill.accounts} аккаунтов · восстановленные события</p>
+              <small>Не влияет на KPI и retention</small>
+            </article>
+            <article className="analytics-source-card">
+              <div><span className="analytics-source-status">Показано отдельно</span><h3>Внутренние задачи</h3></div>
+              <strong>{data.overview.source_breakdown.internal.tasks}</strong>
+              <p>{data.overview.source_breakdown.internal.events} служебных событий · рендеры и фоновые процессы</p>
+              <small>Не считаются действиями пользователей</small>
+            </article>
+          </div>
         </section>
 
         <div className="analytics-grid">
