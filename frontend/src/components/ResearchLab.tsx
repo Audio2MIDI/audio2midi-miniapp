@@ -92,7 +92,9 @@ function ResearchPlayer({
   return (
     <article className="research-variant">
       <div className="research-variant__title">
-        {title ? <strong>{title}</strong> : <><span>Вариант</span><strong>{sample.label}</strong></>}
+        {title
+          ? <strong className="research-variant__heading">{title}</strong>
+          : <><span>Вариант</span><strong>{sample.label}</strong></>}
       </div>
       <audio
         controls
@@ -585,6 +587,16 @@ export default function ResearchLab() {
           </div>
         </section>
 
+        {view === 'compare' && sourceIdentityAudit && (
+          <section className="research-audit-note" aria-label="Описание текущей задачи">
+            <strong>Проверка датасета — результатов PiCoGen здесь нет</strong>
+            <p>
+              Сначала послушайте оригинальную песню, затем фортепианную версию,
+              записанную человеком. Нужно только подтвердить, что это одно произведение.
+            </p>
+          </section>
+        )}
+
         {error && <div className="research-error">{error}</div>}
 
         {view === 'results' && results && <ResultsView results={results} />}
@@ -678,19 +690,27 @@ export default function ResearchLab() {
         )}
 
         {view === 'compare' && state === 'loading' && (
-          <div className="research-loading">Готовлю следующую слепую пару…</div>
+          <div className="research-loading">
+            {sourceIdentityAudit
+              ? 'Готовлю следующую пару исходников…'
+              : 'Готовлю следующую слепую пару…'}
+          </div>
         )}
 
         {view === 'compare' && state !== 'loading' && !comparison && !error && (
           <section className="research-complete">
             <span>✓</span>
             <h2>
-              {mode === 'calibration'
+              {sourceIdentityAudit
+                ? 'Все пары исходников проверены'
+                : mode === 'calibration'
                 ? 'Этот блок калибровки полностью оценён'
                 : 'Эта композиция полностью оценена'}
             </h2>
             <p>
-              {mode === 'calibration'
+              {sourceIdentityAudit
+                ? 'После проверки мы исключим неверные пары и только затем соберём сравнение результатов PiCoGen.'
+                : mode === 'calibration'
                 ? 'Можно выбрать другой блок выше или открыть общие результаты эксперимента.'
                 : 'Можно перейти к следующей композиции или открыть общие результаты эксперимента.'}
             </p>
@@ -700,7 +720,9 @@ export default function ResearchLab() {
                 && activeTrackIndex < tracks.length - 1 && (
                 <button onClick={() => void moveTrack(1)}>Следующая композиция →</button>
               )}
-              <button onClick={() => void showResults()}>Открыть результаты</button>
+              {!sourceIdentityAudit && (
+                <button onClick={() => void showResults()}>Открыть результаты</button>
+              )}
             </div>
           </section>
         )}
@@ -709,7 +731,7 @@ export default function ResearchLab() {
           <>
             <section className="research-source">
               <div>
-                <p>{sourceIdentityAudit ? 'ПРЕДПОЛАГАЕМЫЙ ОРИГИНАЛ' : 'ОРИГИНАЛ'}</p>
+                <p>{sourceIdentityAudit ? 'ОРИГИНАЛЬНАЯ ПЕСНЯ' : 'ОРИГИНАЛ'}</p>
                 <h2>{comparison.track.title}</h2>
                 <span>{comparison.track.artist}</span>
               </div>
@@ -727,7 +749,7 @@ export default function ResearchLab() {
                 onPlay={pauseOtherPlayers}
                 onOpenPianoRoll={setExpandedPianoRoll}
                 onOpenPdf={setExpandedPdf}
-                title={sourceIdentityAudit ? 'Человеческая фортепианная версия' : undefined}
+                title={sourceIdentityAudit ? 'Фортепианная версия, записанная человеком' : undefined}
                 hideDownloads={sourceIdentityAudit}
               />
               {!sourceIdentityAudit && (
@@ -756,15 +778,15 @@ export default function ResearchLab() {
               </div>
               <div className="research-votes">
                 <button onClick={() => void vote('left')} disabled={state === 'submitting'}>
-                  <kbd>A</kbd> {comparison.question?.labels?.left
+                  {!sourceIdentityAudit && <kbd>A</kbd>} {comparison.question?.labels?.left
                     ?? (sourceIdentityAudit ? 'Да, это одна песня' : 'Вариант A')}
                 </button>
                 <button onClick={() => void vote('tie')} disabled={state === 'submitting'}>
-                  <kbd>T</kbd> {comparison.question?.labels?.tie
+                  {!sourceIdentityAudit && <kbd>T</kbd>} {comparison.question?.labels?.tie
                     ?? (sourceIdentityAudit ? 'Не уверен' : 'Примерно равны')}
                 </button>
                 <button onClick={() => void vote('right')} disabled={state === 'submitting'}>
-                  <kbd>B</kbd> {comparison.question?.labels?.right
+                  {!sourceIdentityAudit && <kbd>B</kbd>} {comparison.question?.labels?.right
                     ?? (sourceIdentityAudit ? 'Нет, это другая песня' : 'Вариант B')}
                 </button>
                 <button
@@ -772,7 +794,7 @@ export default function ResearchLab() {
                   onClick={() => void vote('both_bad')}
                   disabled={state === 'submitting'}
                 >
-                  <kbd>X</kbd> {comparison.question?.labels?.both_bad
+                  {!sourceIdentityAudit && <kbd>X</kbd>} {comparison.question?.labels?.both_bad
                     ?? (sourceIdentityAudit ? 'Файлы сломаны' : 'Оба плохие')}
                 </button>
               </div>
