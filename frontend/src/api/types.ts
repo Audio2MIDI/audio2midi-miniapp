@@ -133,6 +133,9 @@ export interface BillingProvider {
   id: PaymentProvider;
   title: string;
   recurring: boolean;
+  canary?: boolean;
+  canary_period?: SubscriptionPeriod | null;
+  canary_price_rub?: number | null;
 }
 
 export interface BillingPlan {

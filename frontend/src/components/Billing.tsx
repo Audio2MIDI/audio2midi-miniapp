@@ -5,6 +5,7 @@ import {
   getBillingPlans,
   getCurrentAccount,
 } from '../api/account'
+import { plansForProvider, priceForProvider } from '../billing'
 import { ApiError } from '../api/client'
 import type {
   AccountSummary,
@@ -96,16 +97,27 @@ export default function Billing({ colorScheme }: BillingProps) {
     void load()
   }, [])
 
-  const selectedPlan = useMemo(
-    () => state.kind === 'ready'
-      ? state.plans.find((plan) => plan.period === selectedPeriod) ?? state.plans[0]
-      : undefined,
-    [selectedPeriod, state],
-  )
   const provider = state.kind === 'ready'
     ? state.providers.find((item) => item.id === selectedProvider) ?? state.providers[0]
     : undefined
+  const availablePlans = useMemo(
+    () => state.kind === 'ready'
+      ? plansForProvider(state.plans, provider)
+      : [],
+    [provider, state],
+  )
+  const selectedPlan = useMemo(
+    () => availablePlans.find((plan) => plan.period === selectedPeriod) ?? availablePlans[0],
+    [availablePlans, selectedPeriod],
+  )
   const recurring = Boolean(provider?.recurring)
+  const priceRub = priceForProvider(selectedPlan, provider)
+
+  useEffect(() => {
+    if (provider?.canary && provider.canary_period) {
+      setSelectedPeriod(provider.canary_period)
+    }
+  }, [provider])
 
   async function checkout() {
     if (!selectedPlan || !provider || state.kind !== 'ready' || (recurring && !consent)) return
@@ -196,7 +208,7 @@ export default function Billing({ colorScheme }: BillingProps) {
         </section>
 
         <section className="billing-plans" aria-label="Тарифы">
-          {state.plans.map((plan) => (
+          {availablePlans.map((plan) => (
             <button
               aria-pressed={plan.period === selectedPeriod}
               className={plan.period === selectedPeriod
@@ -212,24 +224,28 @@ export default function Billing({ colorScheme }: BillingProps) {
               type="button"
             >
               <span>{plan.title}</span>
-              <strong>{plan.price_rub.toLocaleString('ru-RU')} ₽</strong>
+              <strong>{(provider?.canary && provider.canary_price_rub
+                ? provider.canary_price_rub
+                : plan.price_rub).toLocaleString('ru-RU')} ₽</strong>
               <small>{plan.cadence}</small>
               {plan.period === 'month' && <em>Оптимальный</em>}
             </button>
           ))}
         </section>
 
-        {selectedPlan && (
+        {selectedPlan && priceRub !== undefined && (
           <section className="billing-checkout-panel">
             <div className="billing-order-summary">
               <div>
                 <span>К оплате сейчас</span>
-                <strong>{selectedPlan.price_rub.toLocaleString('ru-RU')} ₽</strong>
+                <strong>{priceRub.toLocaleString('ru-RU')} ₽</strong>
               </div>
               <p>
                 {recurring
                   ? `Далее — ${selectedPlan.price_rub.toLocaleString('ru-RU')} ₽ ${selectedPlan.cadence}, пока вы не отмените подписку.`
-                  : `Разовая покупка доступа на ${selectedPlan.title.toLowerCase()}. Автоматических списаний нет.`}
+                  : provider?.canary
+                    ? 'Закрытый тестовый платёж владельца. Автоматических списаний нет.'
+                    : `Разовая покупка доступа на ${selectedPlan.title.toLowerCase()}. Автоматических списаний нет.`}
               </p>
             </div>
 
@@ -249,6 +265,9 @@ export default function Billing({ colorScheme }: BillingProps) {
                         name="payment-provider"
                         onChange={() => {
                           setSelectedProvider(item.id)
+                          if (item.canary && item.canary_period) {
+                            setSelectedPeriod(item.canary_period)
+                          }
                           setConsent(false)
                           setMessage('')
                           setCheckoutKey(`web-${crypto.randomUUID()}`)
@@ -259,8 +278,10 @@ export default function Billing({ colorScheme }: BillingProps) {
                       <span>
                         <strong>{item.title}</strong>
                         <small>
-                          {item.id === 'robokassa'
-                            ? 'Visa, Mastercard и UnionPay зарубежных банков'
+                          {item.canary
+                            ? `Закрытая проверка платежа на ${item.canary_price_rub ?? 10} ₽`
+                            : item.id === 'robokassa'
+                            ? 'Карты зарубежных банков из поддерживаемых Robokassa стран'
                             : 'Российская карта или СБП'}
                         </small>
                       </span>
@@ -278,7 +299,7 @@ export default function Billing({ colorScheme }: BillingProps) {
               />
               <span>
                 Я согласен оформить подписку Audio2MIDI за{' '}
-                <strong>{selectedPlan.price_rub.toLocaleString('ru-RU')} ₽</strong>{' '}
+                <strong>{priceRub.toLocaleString('ru-RU')} ₽</strong>{' '}
                 с автоматическим списанием {selectedPlan.cadence} до отмены.
                 Отменить автопродление можно в профиле; оплаченный период сохранится.{' '}
                 <a href="/support">Условия, отмена и возвраты</a>.
@@ -291,7 +312,7 @@ export default function Billing({ colorScheme }: BillingProps) {
               onClick={() => void checkout()}
               type="button"
             >
-              {busy ? 'Создаём платёж…' : `Перейти к оплате · ${selectedPlan.price_rub.toLocaleString('ru-RU')} ₽`}
+              {busy ? 'Создаём платёж…' : `Перейти к оплате · ${priceRub.toLocaleString('ru-RU')} ₽`}
             </button>
             {!state.enabled && (
               <p className="billing-message">Веб-оплата временно недоступна. Попробуйте чуть позже.</p>
@@ -300,6 +321,12 @@ export default function Billing({ colorScheme }: BillingProps) {
             <p className="billing-security">
               Данные карты вводятся на защищённой странице{' '}
               {provider?.id === 'robokassa' ? 'Robokassa' : 'Т‑Банка'} и не попадают на сервер Audio2MIDI.
+            </p>
+            <p className="billing-security">
+              Оплачивая доступ, вы принимаете{' '}
+              <a href="https://audio2midi.ru/offer">публичную оферту</a>,{' '}
+              <a href="https://audio2midi.ru/privacy">политику конфиденциальности</a>{' '}
+              и <a href="https://audio2midi.ru/refunds">условия возврата</a>.
             </p>
           </section>
         )}
