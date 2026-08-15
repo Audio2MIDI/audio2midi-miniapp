@@ -1,7 +1,7 @@
 import { lazy, Suspense, type ReactNode } from 'react'
 
 import { useTelegram } from './hooks/useTelegram'
-import { safeEditorReturnPath } from './routing'
+import { paymentReturnIntent, safeEditorReturnPath } from './routing'
 import { ProductLoading } from './components/ProductFrame'
 
 const Billing = lazy(() => import('./components/Billing'))
@@ -38,7 +38,12 @@ function App() {
   if (window.location.pathname === '/support') return route(<Support colorScheme={colorScheme} />)
   if (window.location.pathname === '/billing') return route(<Billing colorScheme={colorScheme} />)
   if (window.location.pathname === '/payment/return') {
-    return route(<PaymentReturn colorScheme={colorScheme} intentId={new URLSearchParams(window.location.search).get('intent')} />)
+    return route(
+      <PaymentReturn
+        colorScheme={colorScheme}
+        intentId={paymentReturnIntent(window.location.search)}
+      />,
+    )
   }
 
   const reelsMatch = window.location.pathname.match(/^\/internal\/reels(?:\/([0-9a-f-]+))?$/i)

@@ -145,6 +145,10 @@ async function mockApi(page: Page, options: MockOptions = {}) {
       return json({
         enabled: options.billingEnabled ?? true,
         recurring_enabled: options.recurring ?? true,
+        providers: [
+          { id: 'tbank', title: 'Карта РФ / СБП', recurring: options.recurring ?? true },
+          { id: 'robokassa', title: 'Иностранная карта', recurring: false },
+        ],
         currency: 'RUB',
         consent_version: 'v1',
         plans: billingPlans,
@@ -378,6 +382,21 @@ test('one-time billing is available without recurring consent', async ({ page })
   await expect(page.getByRole('checkbox')).toHaveCount(0)
   await expect(page.getByText(/Автоматических списаний нет/)).toBeVisible()
   await expect(page.getByRole('button', { name: /Перейти к оплате/ })).toBeEnabled()
+})
+
+test('foreign-card checkout is clearly one-time and accessible', async ({ page }) => {
+  await mockApi(page, { recurring: true })
+  await page.setViewportSize({ width: 1024, height: 768 })
+  await page.goto('/billing')
+  await page.getByRole('radio', { name: /Иностранная карта/ }).check()
+  await expect(page.getByRole('checkbox')).toHaveCount(0)
+  await expect(page.getByText(/Visa, Mastercard и UnionPay/)).toBeVisible()
+  await expect(page.getByText(/Автоматических списаний нет/)).toBeVisible()
+  await expect(page.getByText(/защищённой странице Robokassa/)).toBeVisible()
+  await expect(page.getByRole('button', { name: /Перейти к оплате/ })).toBeEnabled()
+  await expectNoOverflow(page)
+  await expectNoA11yViolations(page)
+  await page.screenshot({ path: 'artifacts/ui/billing-foreign-card.png', fullPage: true })
 })
 
 test('profile keeps account, identities, subscription and devices scannable', async ({ page }) => {

@@ -1676,7 +1676,7 @@
 .billing-consent {
   display: grid;
   grid-column: 2;
-  grid-row: 1 / span 2;
+  grid-row: 2;
   grid-template-columns: 22px 1fr;
   align-content: start;
   gap: 11px;
@@ -1697,7 +1697,72 @@
   color: var(--product-blue-soft);
 }
 
+.billing-provider-picker {
+  display: grid;
+  grid-column: 2;
+  grid-row: 1;
+  gap: 9px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.billing-provider-picker legend {
+  margin-bottom: 2px;
+  color: var(--product-muted);
+  font-size: 12px;
+}
+
+.billing-provider-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.billing-provider {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 9px;
+  min-height: 70px;
+  padding: 12px;
+  border: 1px solid var(--product-border);
+  border-radius: 14px;
+  background: var(--product-panel);
+  cursor: pointer;
+}
+
+.billing-provider--selected {
+  border-color: var(--product-blue);
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.billing-provider input {
+  width: 17px;
+  height: 17px;
+  margin: 1px 0 0;
+  accent-color: var(--product-blue);
+}
+
+.billing-provider span {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+}
+
+.billing-provider strong {
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.billing-provider small {
+  color: var(--product-muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
 .billing-pay-button {
+  grid-column: 1;
   min-width: 230px;
 }
 
@@ -1837,6 +1902,12 @@
   }
 
   .billing-consent {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .billing-provider-picker,
+  .billing-pay-button {
     grid-column: 1;
     grid-row: auto;
   }
@@ -2014,6 +2085,10 @@
   .billing-pay-button {
     width: 100%;
     min-width: 0;
+  }
+
+  .billing-provider-options {
+    grid-template-columns: 1fr;
   }
 
   .billing-checkout-panel {
