@@ -1,7 +1,8 @@
 const BASE_URL = '/research-api/v1/research'
-const DEV_MOCK = import.meta.env.DEV
-  && typeof window !== 'undefined'
-  && new URLSearchParams(window.location.search).get('mock') === '1'
+const DEV_MOCK_MODE = import.meta.env.DEV && typeof window !== 'undefined'
+  ? new URLSearchParams(window.location.search).get('mock')
+  : null
+const DEV_MOCK = DEV_MOCK_MODE === '1' || DEV_MOCK_MODE === 'source-audit'
 let mockCompleted = 7
 
 export interface ResearchExperiment {
@@ -146,6 +147,22 @@ export interface ResearchVote {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (DEV_MOCK) {
     if (path === '/experiments') {
+      if (DEV_MOCK_MODE === 'source-audit') {
+        return {
+          experiments: [{
+            id: 'coverbench-v1-source-audit-preview',
+            title: 'CoverBench v1 · проверка исходников',
+            status: 'active',
+            track_count: 30,
+            sample_count: 60,
+            condition_count: 2,
+            metadata: JSON.stringify({
+              kind: 'source_identity_audit',
+              card_count: 30,
+            }),
+          }],
+        } as T
+      }
       return {
         experiments: [{
           id: 'listening-lab-preview',
@@ -194,6 +211,51 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       } as T
     }
     if (path.includes('/next')) {
+      if (DEV_MOCK_MODE === 'source-audit') {
+        return {
+          comparison: {
+            experiment_id: 'coverbench-v1-source-audit-preview',
+            card_id: 'source-audit-preview-1',
+            question: {
+              kind: 'source_identity',
+              prompt: 'Это фортепианная версия той же композиции, что и оригинал выше?',
+              choices: ['left', 'right', 'tie', 'both_bad'],
+              labels: {
+                left: 'Да, пара верная',
+                right: 'Нет, это другая песня',
+                tie: 'Не уверен',
+                both_bad: 'Файлы не прослушать',
+              },
+            },
+            track: {
+              id: 'source-audit-preview',
+              title: 'В жизни так бывает',
+              artist: 'Мохито',
+              source_audio_url: 'data:audio/wav;base64,',
+            },
+            left: {
+              id: '00000000-0000-0000-0000-000000000011',
+              label: 'A',
+              audio_url: 'data:audio/wav;base64,',
+              midi_url: '#',
+              piano_roll_url: null,
+              pdf_url: null,
+              musicxml_url: null,
+            },
+            right: {
+              id: '00000000-0000-0000-0000-000000000012',
+              label: 'B',
+              audio_url: 'data:audio/wav;base64,',
+              midi_url: '#',
+              piano_roll_url: null,
+              pdf_url: null,
+              musicxml_url: null,
+            },
+          },
+          progress: { completed: 0, total: 30 },
+          experiment_progress: { completed: 0, total: 30 },
+        } as T
+      }
       return {
         comparison: {
           experiment_id: 'listening-lab-preview',

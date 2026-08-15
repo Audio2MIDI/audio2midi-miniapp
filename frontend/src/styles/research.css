@@ -127,6 +127,29 @@
   transition: width 220ms ease;
 }
 
+.research-audit-note {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 18px;
+  padding: 18px 20px;
+  border: 1px solid rgba(37, 99, 235, 0.34);
+  border-radius: 14px;
+  background: rgba(37, 99, 235, 0.09);
+}
+
+.research-audit-note strong {
+  color: #dce7ff;
+  font-size: 13px;
+}
+
+.research-audit-note p {
+  max-width: 760px;
+  margin: 0;
+  color: #aeb6c8;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .research-source,
 .research-track-nav,
 .research-variant,
@@ -290,6 +313,18 @@
   font-family: var(--research-display);
   font-size: 24px;
   font-weight: 400;
+}
+
+.research-variant__title .research-variant__heading {
+  display: block;
+  width: auto;
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
 }
 
 .research-variant audio {
