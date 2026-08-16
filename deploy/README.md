@@ -1,6 +1,6 @@
 # Self-hosted deployment
 
-The production frontend is served as static files by nginx:
+The production frontend and editor are served as one atomic static release by nginx:
 
 - canonical URL: `https://app.audio2midi.ru`
 - compatibility URL: `https://miniapp.audio2midi.ru`
@@ -15,8 +15,9 @@ is being validated.
 
 ## First installation
 
-1. Build and validate `frontend/dist`.
-2. Copy it to a release directory named after the Git commit.
+1. Build and validate a composite release containing the Mini App at `/` and
+   the editor at `/editor/`.
+2. Copy the composite directory to a release directory named after both Git commits.
 3. Point `/opt/audio2midi-web/current` at that release.
 4. Install `deploy/nginx/app.audio2midi.ru.bootstrap.conf`.
 5. Point the `app` and `miniapp` DNS records at the VPS.
@@ -25,6 +26,18 @@ is being validated.
    `deploy/nginx/app.audio2midi.ru.conf`.
 
 Always run `nginx -t` before reloading nginx.
+
+Build the release locally with:
+
+```bash
+./scripts/build_composite_release.sh \
+  /path/to/audio2midi-editor \
+  /tmp/audio2midi-web-release
+```
+
+Never activate a directory that has not passed
+`scripts/validate_composite_release.sh`. This prevents an ordinary Mini App
+deployment from silently deleting `/editor/`.
 
 The `www` redirect is installed independently from
 `deploy/nginx/www.audio2midi.ru.conf` and uses its own Let's Encrypt
@@ -36,6 +49,7 @@ certificate.
 curl -fsS https://app.audio2midi.ru/health
 curl -fsS https://miniapp.audio2midi.ru/health
 curl -fsS https://app.audio2midi.ru/ | grep -q '/assets/index-'
+curl -fsS https://app.audio2midi.ru/editor/00000000-0000-0000-0000-000000000000 | grep -q '/editor/'
 ```
 
 Validate a real `?file=` URL without printing its presigned S3 credentials in

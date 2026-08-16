@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   parseTelegramStartParam,
+  openResultItemId,
   paymentReturnIntent,
   safeEditorReturnPath,
   telegramLoginUrl,
@@ -26,6 +27,22 @@ describe('safeEditorReturnPath', () => {
     '/editor/not-a-uuid',
   ])('rejects unsafe or unsupported return path %s', (candidate) => {
     expect(safeEditorReturnPath(candidate, ORIGIN)).toBeNull()
+  })
+})
+
+describe('result opening routes', () => {
+  it('accepts durable and legacy result identifiers', () => {
+    expect(openResultItemId(`/open/${PROJECT_ID}`)).toBe(PROJECT_ID)
+    expect(openResultItemId('/open/legacy-42')).toBe('legacy-42')
+  })
+
+  it.each([
+    '/open/legacy-0',
+    '/open/legacy--1',
+    '/open/not-a-uuid',
+    `/open/${PROJECT_ID}/extra`,
+  ])('rejects unsupported result route %s', (pathname) => {
+    expect(openResultItemId(pathname)).toBeNull()
   })
 })
 
