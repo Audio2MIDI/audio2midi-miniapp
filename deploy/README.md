@@ -39,6 +39,9 @@ Never activate a directory that has not passed
 `scripts/validate_composite_release.sh`. This prevents an ordinary Mini App
 deployment from silently deleting `/editor/`.
 
+When transferring the release from macOS as a tar archive, set
+`COPYFILE_DISABLE=1` so AppleDouble metadata files are not created on the VPS.
+
 The `www` redirect is installed independently from
 `deploy/nginx/www.audio2midi.ru.conf` and uses its own Let's Encrypt
 certificate.
