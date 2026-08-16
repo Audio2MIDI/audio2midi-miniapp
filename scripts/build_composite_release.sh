@@ -33,6 +33,7 @@ printf '{\n  "schema_version": 1,\n  "generated_at": "%s",\n  "miniapp_commit": 
   "$generated_at" "$miniapp_sha" "$editor_sha" > "$stage_dir/release-manifest.json"
 
 (cd "$stage_dir" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 shasum -a 256 > SHA256SUMS)
+chmod -R u=rwX,go=rX "$stage_dir"
 "$repo_root/scripts/validate_composite_release.sh" "$stage_dir"
 
 mkdir -p "$(dirname "$output_dir")"
