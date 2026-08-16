@@ -13,6 +13,7 @@ const Profile = lazy(() => import('./components/Profile'))
 const ProjectPage = lazy(() => import('./components/ProjectPage'))
 const ReelsStudio = lazy(() => import('./components/ReelsStudio'))
 const ResearchLab = lazy(() => import('./components/ResearchLab'))
+const DatasetAuditLab = lazy(() => import('./components/DatasetAuditLab'))
 const Support = lazy(() => import('./components/Support'))
 const AnalyticsDashboard = lazy(() => import('./components/AnalyticsDashboard'))
 const OpenResult = lazy(() => import('./components/OpenResult'))
@@ -35,6 +36,10 @@ function App() {
   } = useTelegram()
   const queryReturnPath = safeEditorReturnPath(new URLSearchParams(window.location.search).get('next'))
   const returnPath = queryReturnPath ?? telegramReturnPath
+
+  if (window.location.pathname.startsWith('/research/dataset-audit')) {
+    return route(<DatasetAuditLab initData={initData} colorScheme={colorScheme} />)
+  }
 
   if (
     window.location.pathname.startsWith('/research/listening')

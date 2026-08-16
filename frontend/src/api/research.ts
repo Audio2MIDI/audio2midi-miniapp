@@ -5,6 +5,17 @@ const DEV_MOCK_MODE = import.meta.env.DEV && typeof window !== 'undefined'
   : null
 const DEV_MOCK = DEV_MOCK_MODE === '1' || DEV_MOCK_MODE === 'source-audit'
 let mockCompleted = 7
+const MOCK_PIANO_ROLL = `data:image/svg+xml,${encodeURIComponent(`
+  <svg xmlns="http://www.w3.org/2000/svg" width="1680" height="480" viewBox="0 0 1680 480">
+    <rect width="1680" height="480" fill="#080b0f"/>
+    <g stroke="#27303a" stroke-width="2" opacity=".8">
+      <path d="M0 80H1680M0 160H1680M0 240H1680M0 320H1680M0 400H1680"/>
+      <path d="M240 0V480M480 0V480M720 0V480M960 0V480M1200 0V480M1440 0V480"/>
+    </g>
+    <g fill="#22c55e"><rect x="90" y="300" width="180" height="22"/><rect x="290" y="270" width="120" height="22"/><rect x="430" y="240" width="210" height="22"/></g>
+    <g fill="#38bdf8"><rect x="690" y="220" width="90" height="22"/><rect x="800" y="190" width="170" height="22"/><rect x="990" y="250" width="250" height="22"/><rect x="1270" y="180" width="260" height="22"/></g>
+  </svg>
+`)}`
 
 function telegramInitData(): string | null {
   if (typeof window === 'undefined') return null
@@ -159,8 +170,83 @@ export interface ResearchVote {
   response_ms: number
 }
 
+export interface DatasetAudit {
+  id: string
+  title: string
+  status: 'active' | 'closed'
+  card_count: number
+  completed_count: number
+}
+
+export type DatasetAuditTriState = 'yes' | 'no' | 'unsure' | 'files_broken'
+export type DatasetAuditArrangementType =
+  | 'full_arrangement'
+  | 'accompaniment'
+  | 'piano_original'
+  | 'other'
+  | 'unsure'
+  | 'files_broken'
+
+export interface DatasetAuditCard {
+  id: string
+  audit_id: string
+  question: Record<string, string>
+  source_audio_url: string
+  target_piano_audio_url: string
+  midi_render_audio_url: string
+  target_midi_url: string
+  piano_roll_url: string
+}
+
+export interface DatasetAuditReview {
+  session_id: string
+  card_id: string
+  same_composition: DatasetAuditTriState
+  piano_clean: DatasetAuditTriState
+  target_suitable: DatasetAuditTriState
+  arrangement_type: DatasetAuditArrangementType
+  extra_instruments: DatasetAuditTriState
+  comment: string
+  response_ms: number
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (DEV_MOCK) {
+    if (path === '/dataset-audits') {
+      return {
+        audits: [{
+          id: 'dataset-provenance-audit-100-v1',
+          title: 'Аудит корпуса · 100 пар',
+          status: 'active',
+          card_count: 100,
+          completed_count: 17,
+        }],
+      } as T
+    }
+    if (path.includes('/dataset-audits/') && path.endsWith('/next')) {
+      return {
+        card: {
+          id: '30000000-0000-0000-0000-000000000001',
+          audit_id: 'dataset-provenance-audit-100-v1',
+          question: {
+            same_composition: 'Это одна и та же композиция?',
+            piano_clean: 'В целевом аудио слышно только фортепиано?',
+            target_suitable: 'Подходит ли этот MIDI для обучения?',
+            arrangement_type: 'Какой это тип фортепианной версии?',
+            extra_instruments: 'Слышны ли дополнительные инструменты?',
+          },
+          source_audio_url: 'data:audio/wav;base64,',
+          target_piano_audio_url: 'data:audio/wav;base64,',
+          midi_render_audio_url: 'data:audio/wav;base64,',
+          target_midi_url: '#',
+          piano_roll_url: MOCK_PIANO_ROLL,
+        },
+        progress: { completed: 17, total: 100 },
+      } as T
+    }
+    if (path.includes('/dataset-audits/') && path.endsWith('/reviews')) {
+      return undefined as T
+    }
     if (path === '/experiments') {
       if (DEV_MOCK_MODE === 'source-audit') {
         return {
@@ -368,6 +454,32 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export async function listResearchExperiments(): Promise<ResearchExperiment[]> {
   const payload = await request<{ experiments: ResearchExperiment[] }>('/experiments')
   return payload.experiments
+}
+
+export async function listDatasetAudits(): Promise<DatasetAudit[]> {
+  const payload = await request<{ audits: DatasetAudit[] }>('/dataset-audits')
+  return payload.audits
+}
+
+export async function getNextDatasetAuditCard(
+  auditId: string,
+): Promise<{ card: DatasetAuditCard | null; progress: ResearchProgress }> {
+  return request<{ card: DatasetAuditCard | null; progress: ResearchProgress }>(
+    `/dataset-audits/${encodeURIComponent(auditId)}/next`,
+  )
+}
+
+export function submitDatasetAuditReview(
+  auditId: string,
+  review: DatasetAuditReview,
+): Promise<void> {
+  return request<void>(
+    `/dataset-audits/${encodeURIComponent(auditId)}/reviews`,
+    {
+      method: 'POST',
+      body: JSON.stringify(review),
+    },
+  )
 }
 
 export async function listResearchTracks(
