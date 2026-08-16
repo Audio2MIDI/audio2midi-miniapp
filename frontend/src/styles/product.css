@@ -1443,6 +1443,22 @@
   margin-top: 28px;
 }
 
+.project-visualizer .section-heading a {
+  color: var(--product-blue-soft);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.project-visualizer iframe {
+  display: block;
+  width: 100%;
+  height: min(56vw, 520px);
+  min-height: 340px;
+  border: 1px solid var(--product-border);
+  border-radius: 10px;
+  background: #050507;
+}
+
 .workspace-version {
   display: block;
   margin-top: 30px;
@@ -2055,6 +2071,11 @@
   .workspace-actions .primary-action,
   .workspace-actions .secondary-action {
     width: 100%;
+  }
+
+  .project-visualizer iframe {
+    height: 390px;
+    min-height: 390px;
   }
 
   .project-files,

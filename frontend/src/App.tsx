@@ -1,7 +1,7 @@
 import { lazy, Suspense, type ReactNode } from 'react'
 
 import { useTelegram } from './hooks/useTelegram'
-import { paymentReturnIntent, safeEditorReturnPath } from './routing'
+import { openResultItemId, paymentReturnIntent, safeEditorReturnPath } from './routing'
 import { ProductLoading } from './components/ProductFrame'
 
 const Billing = lazy(() => import('./components/Billing'))
@@ -15,6 +15,8 @@ const ReelsStudio = lazy(() => import('./components/ReelsStudio'))
 const ResearchLab = lazy(() => import('./components/ResearchLab'))
 const Support = lazy(() => import('./components/Support'))
 const AnalyticsDashboard = lazy(() => import('./components/AnalyticsDashboard'))
+const OpenResult = lazy(() => import('./components/OpenResult'))
+const BrowserHandoff = lazy(() => import('./components/BrowserHandoff'))
 
 function route(content: ReactNode) {
   return <Suspense fallback={<ProductLoading />}>{content}</Suspense>
@@ -41,6 +43,7 @@ function App() {
     return route(<ResearchLab initData={initData} colorScheme={colorScheme} />)
   }
   if (window.location.pathname === '/support') return route(<Support colorScheme={colorScheme} />)
+  if (window.location.pathname === '/handoff') return route(<BrowserHandoff colorScheme={colorScheme} />)
   if (window.location.pathname === '/billing') return route(<Billing colorScheme={colorScheme} />)
   if (window.location.pathname === '/payment/return') {
     return route(
@@ -55,6 +58,11 @@ function App() {
   if (reelsMatch) return route(<ReelsStudio candidateId={reelsMatch[1]} colorScheme={colorScheme} />)
   if (window.location.pathname === '/internal/analytics') return route(<AnalyticsDashboard colorScheme={colorScheme} />)
   if (isLoading) return <ProductLoading />
+
+  const resultItemId = openResultItemId(window.location.pathname)
+  if (resultItemId) {
+    return route(<OpenResult itemId={resultItemId} initData={initData} colorScheme={colorScheme} />)
+  }
 
   const isVisualizer = Boolean(fileUrl || midiParam) || window.location.pathname === '/visualizer'
   if (window.location.pathname === '/new') return route(<NewProject initData={initData} colorScheme={colorScheme} />)

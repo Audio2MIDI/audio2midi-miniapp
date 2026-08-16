@@ -6,6 +6,13 @@ export interface TelegramStartRoute {
   returnPath: string | null
 }
 
+const OPEN_RESULT_PATH_RE =
+  /^\/open\/(legacy-[1-9][0-9]*|[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/?$/i
+
+export function openResultItemId(pathname: string): string | null {
+  return pathname.match(OPEN_RESULT_PATH_RE)?.[1] ?? null
+}
+
 export function paymentReturnIntent(search: string): string | null {
   const params = new URLSearchParams(search)
   return params.get('intent') ?? params.get('Shp_intent')

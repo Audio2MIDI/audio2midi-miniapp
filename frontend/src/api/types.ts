@@ -221,6 +221,15 @@ export interface MaterializedProjectResponse {
   editor_url: string;
 }
 
+export interface BrowserHandoffResponse {
+  handoff_url: string;
+  expires_seconds: number;
+}
+
+export interface BrowserHandoffConsumeResponse {
+  target: string;
+}
+
 export interface ProjectUploadResponse {
   project: {
     id: string;

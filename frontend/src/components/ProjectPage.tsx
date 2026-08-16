@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   authenticateWithTelegram,
+  createBrowserHandoff,
   getEditorCapabilities,
   getProject,
   renderProjectVideo,
@@ -51,6 +52,7 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
   const [editorEnabled, setEditorEnabled] = useState(false)
   const [error, setError] = useState('')
   const [videoBusy, setVideoBusy] = useState(false)
+  const [browserBusy, setBrowserBusy] = useState(false)
   const [feedbackRating, setFeedbackRating] = useState(0)
   const [feedbackComment, setFeedbackComment] = useState('')
   const [feedbackSent, setFeedbackSent] = useState(false)
@@ -128,6 +130,25 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
         ? 'Сначала откройте полный результат.'
         : 'Не удалось запустить создание видео.')
       setVideoBusy(false)
+    }
+  }
+
+  async function openFullEditor() {
+    if (browserBusy) return
+    setBrowserBusy(true)
+    setError('')
+    try {
+      const handoff = await createBrowserHandoff(projectId)
+      const url = new URL(handoff.handoff_url, window.location.origin).toString()
+      const telegram = (window as unknown as {
+        Telegram?: { WebApp?: { openLink?: (target: string) => void } }
+      }).Telegram?.WebApp
+      if (telegram?.openLink) telegram.openLink(url)
+      else window.open(url, '_blank', 'noopener,noreferrer')
+    } catch {
+      setError('Не удалось открыть полную версию редактора.')
+    } finally {
+      setBrowserBusy(false)
     }
   }
 
@@ -222,6 +243,11 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
                       objectType: 'project', objectId: project.id, properties: { engine: latest?.engine, surface: 'project' },
                     })}>Открыть визуализацию</a>
                     {editorEnabled && <a className="secondary-action" href={`/editor/${project.id}`}>Редактировать</a>}
+                    {editorEnabled && initData && (
+                      <button className="secondary-action" disabled={browserBusy} onClick={() => void openFullEditor()} type="button">
+                        {browserBusy ? 'Открываем…' : 'Открыть в браузере ↗'}
+                      </button>
+                    )}
                   </div>
                 )}
               </article>
@@ -235,6 +261,20 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
                   <p>После покупки откроются MIDI, PDF и полный MP3. Повторная обработка не нужна.</p>
                   <a className="primary-action" href="/billing">Открыть полный результат</a>
                 </div>
+              </section>
+            )}
+
+            {midi && !locked && (
+              <section className="project-section project-visualizer">
+                <div className="section-heading">
+                  <h2>Piano roll</h2>
+                  <a href={visualizerUrl(midi.download_url)}>На весь экран ↗</a>
+                </div>
+                <iframe
+                  loading="lazy"
+                  src={visualizerUrl(midi.download_url)}
+                  title={`Piano roll — ${project.title}`}
+                />
               </section>
             )}
 

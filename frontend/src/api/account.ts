@@ -12,6 +12,8 @@ import type {
   EditorCapabilities,
   LibraryResponse,
   MaterializedProjectResponse,
+  BrowserHandoffResponse,
+  BrowserHandoffConsumeResponse,
   ProfileResponse,
   ProjectDetailResponse,
   ProjectSubmitResponse,
@@ -62,6 +64,22 @@ export async function materializeEditorProject(
   return post<MaterializedProjectResponse>(
     `/v1/me/library/${encodeURIComponent(itemId)}/materialize-project`,
   )
+}
+
+export async function createBrowserHandoff(
+  projectId: string,
+): Promise<BrowserHandoffResponse> {
+  return post<BrowserHandoffResponse>('/v1/me/browser-handoffs', {
+    project_id: projectId,
+  })
+}
+
+export async function consumeBrowserHandoff(
+  token: string,
+): Promise<BrowserHandoffConsumeResponse> {
+  return post<BrowserHandoffConsumeResponse>('/v1/auth/browser-handoff/consume', {
+    token,
+  })
 }
 
 export async function logout(): Promise<void> {
