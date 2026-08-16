@@ -22,6 +22,10 @@
   text-decoration: none;
 }
 
+.research-header__audit-link {
+  margin-left: auto;
+}
+
 .dataset-audit-player p {
   min-height: 38px;
   margin: -10px 0 18px;
