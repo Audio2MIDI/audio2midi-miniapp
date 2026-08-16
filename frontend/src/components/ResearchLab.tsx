@@ -566,6 +566,12 @@ export default function ResearchLab({ initData, colorScheme }: ResearchLabProps)
       <div className="research-container">
         <header className="research-header">
           <a href="https://audio2midi.ru" className="research-brand">Audio2MIDI</a>
+          <a
+            className="dataset-audit-back research-header__audit-link"
+            href="/research/dataset-audit"
+          >
+            Аудит корпуса
+          </a>
           <div className="research-header__actions">
             {!calibrationOnly && (
               <button
