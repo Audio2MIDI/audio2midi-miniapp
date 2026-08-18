@@ -1,9 +1,17 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { getCurrentAccount } from '../api/account'
+import {
+  authenticateWithTelegram,
+  createProjectImport,
+  createProjectUpload,
+  getCurrentAccount,
+  getProjectImport,
+  uploadProjectSource,
+} from '../api/account'
 import { ApiError } from '../api/client'
 import {
   cancelReelCandidate,
+  createReelCandidate,
   getReelCandidate,
   getReelCandidates,
   getReelsCapabilities,
@@ -14,12 +22,21 @@ import {
   type ReelCandidate,
   type ReelCandidateSummary,
   type ReelRender,
+  type ReelsCapabilities,
 } from '../api/reels'
+import {
+  REEL_ACCEPTED_AUDIO,
+  reelDownloadUrl,
+  reelFileError,
+  reelMimeForFile,
+  reelSha256,
+} from '../reelSource'
 import EmailAuthForm from './EmailAuthForm'
 
 interface ReelsStudioProps {
   candidateId?: string
   colorScheme: 'light' | 'dark'
+  initData: string | null
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -64,35 +81,48 @@ function formatDate(value: string | null): string {
 export default function ReelsStudio({
   candidateId,
   colorScheme,
+  initData,
 }: ReelsStudioProps) {
   const [authState, setAuthState] = useState<
     'loading' | 'signed-out' | 'denied' | 'ready' | 'error'
   >('loading')
   const [authNonce, setAuthNonce] = useState(0)
-  const [publishActionsEnabled, setPublishActionsEnabled] = useState(false)
+  const [capabilities, setCapabilities] = useState<ReelsCapabilities | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    void getCurrentAccount()
-      .then(() => getReelsCapabilities())
-      .then((capabilities) => {
-        if (!cancelled) {
-          setPublishActionsEnabled(capabilities.publish_actions_enabled)
-          setAuthState(capabilities.enabled ? 'ready' : 'denied')
+    async function authenticate() {
+      try {
+        try {
+          await getCurrentAccount()
+        } catch (authError) {
+          if (!(authError instanceof ApiError) || authError.status !== 401 || !initData) {
+            throw authError
+          }
+          const authentication = await authenticateWithTelegram(initData)
+          if ('merge_required' in authentication && authentication.merge_required) {
+            throw new ApiError('Сначала объедините аккаунты в профиле.', 409)
+          }
         }
-      })
-      .catch((error) => {
+        const nextCapabilities = await getReelsCapabilities()
+        if (!cancelled) {
+          setCapabilities(nextCapabilities)
+          setAuthState(nextCapabilities.enabled ? 'ready' : 'denied')
+        }
+      } catch (error) {
         if (cancelled) return
         if (error instanceof ApiError && error.status === 401) {
           setAuthState('signed-out')
         } else {
           setAuthState('error')
         }
-      })
+      }
+    }
+    void authenticate()
     return () => {
       cancelled = true
     }
-  }, [authNonce])
+  }, [authNonce, initData])
 
   if (authState === 'loading') {
     return <StudioMessage colorScheme={colorScheme}>Открываем Studio…</StudioMessage>
@@ -130,15 +160,18 @@ export default function ReelsStudio({
       </StudioMessage>
     )
   }
+  if (!capabilities) {
+    return <StudioMessage colorScheme={colorScheme}>Открываем Studio…</StudioMessage>
+  }
   return candidateId
     ? (
         <ReelDetail
           candidateId={candidateId}
           colorScheme={colorScheme}
-          publishActionsEnabled={publishActionsEnabled}
+          publishActionsEnabled={capabilities.publish_actions_enabled}
         />
       )
-    : <ReelList colorScheme={colorScheme} />
+    : <ReelList capabilities={capabilities} colorScheme={colorScheme} />
 }
 
 function StudioMessage({
@@ -155,7 +188,13 @@ function StudioMessage({
   )
 }
 
-function ReelList({ colorScheme }: { colorScheme: 'light' | 'dark' }) {
+function ReelList({
+  capabilities,
+  colorScheme,
+}: {
+  capabilities: ReelsCapabilities
+  colorScheme: 'light' | 'dark'
+}) {
   const [items, setItems] = useState<ReelCandidateSummary[]>([])
   const [filter, setFilter] = useState('')
   const [loading, setLoading] = useState(true)
@@ -174,7 +213,8 @@ function ReelList({ colorScheme }: { colorScheme: 'light' | 'dark' }) {
   }, [filter])
 
   useEffect(() => {
-    void load()
+    const timeout = window.setTimeout(() => void load(), 0)
+    return () => window.clearTimeout(timeout)
   }, [load])
 
   return (
@@ -195,6 +235,9 @@ function ReelList({ colorScheme }: { colorScheme: 'light' | 'dark' }) {
             пользовательскую очередь.
           </p>
         </section>
+        {capabilities.manual_generation_enabled && (
+          <NewReelPanel activeLimit={capabilities.manual_active_limit} />
+        )}
         <nav className="reels-filters" aria-label="Фильтр статусов">
           {['', 'generating', 'rendering', 'ready_for_preview', 'preview', 'scheduled', 'published', 'rejected', 'failed'].map((value) => (
             <button
@@ -219,7 +262,11 @@ function ReelList({ colorScheme }: { colorScheme: 'light' | 'dark' }) {
                 </span>
                 <span className="reels-track">
                   <strong>{item.artist} — {item.title}</strong>
-                  <small>{item.source_provider} · trend {item.trend_score.toFixed(1)}</small>
+                  <small>
+                    {item.source_provider} · {item.origin === 'owner_manual'
+                      ? 'вручную'
+                      : `trend ${item.trend_score.toFixed(1)}`}
+                  </small>
                 </span>
                 <span>
                   <strong>{item.best_quality_score?.toFixed(1) ?? '—'}</strong>
@@ -240,6 +287,192 @@ function ReelList({ colorScheme }: { colorScheme: 'light' | 'dark' }) {
         )}
       </div>
     </main>
+  )
+}
+
+function NewReelPanel({ activeLimit }: { activeLimit: number }) {
+  const [sourceMode, setSourceMode] = useState<'file' | 'link'>('link')
+  const [file, setFile] = useState<File | null>(null)
+  const [sourceUrl, setSourceUrl] = useState('')
+  const [artist, setArtist] = useState('')
+  const [title, setTitle] = useState('')
+  const [language, setLanguage] = useState<'ru' | 'en'>('ru')
+  const [progress, setProgress] = useState('')
+  const [error, setError] = useState('')
+  const idempotencyKey = useRef(crypto.randomUUID())
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  async function waitForImport(importId: string): Promise<string> {
+    for (let attempt = 0; attempt < 150; attempt += 1) {
+      const result = await getProjectImport(importId)
+      if (result.import.status === 'ready' && result.import.project_id) {
+        return result.import.project_id
+      }
+      if (result.import.status === 'failed') {
+        throw new Error(
+          result.import.sanitized_error || 'Не удалось получить аудио по ссылке.',
+        )
+      }
+      setProgress(
+        result.import.status === 'resolving'
+          ? 'Получаем аудио…'
+          : 'Источник в очереди…',
+      )
+      await new Promise((resolve) => window.setTimeout(resolve, 2000))
+    }
+    throw new Error(
+      'Источник сохранён, но подготовка занимает больше обычного. Попробуйте позже.',
+    )
+  }
+
+  function chooseFile(nextFile: File | undefined) {
+    setError('')
+    if (!nextFile) return
+    const validationError = reelFileError(nextFile)
+    if (validationError) {
+      setFile(null)
+      setError(validationError)
+      return
+    }
+    setFile(nextFile)
+    if (!title) setTitle(nextFile.name.replace(/\.[^.]+$/, ''))
+  }
+
+  async function startGeneration() {
+    setError('')
+    try {
+      let projectId: string
+      if (sourceMode === 'file') {
+        if (!file) throw new Error('Выберите аудиофайл.')
+        setProgress('Проверяем файл…')
+        const digest = await reelSha256(file)
+        const effectiveTitle = title.trim() || file.name.replace(/\.[^.]+$/, '')
+        setProgress('Загружаем аудио…')
+        const upload = await createProjectUpload({
+          title: effectiveTitle,
+          filename: file.name,
+          sha256: digest,
+          size_bytes: file.size,
+          mime_type: reelMimeForFile(file),
+        })
+        await uploadProjectSource(upload.upload_url, file, upload.required_headers)
+        projectId = upload.project.id
+      } else {
+        const url = sourceUrl.trim()
+        if (!/^https:\/\//i.test(url)) {
+          throw new Error('Вставьте полную HTTPS-ссылку на песню.')
+        }
+        setProgress('Готовим источник…')
+        const created = await createProjectImport({
+          source_kind: 'url',
+          source_value: url,
+          title: title.trim() || undefined,
+        })
+        projectId = await waitForImport(created.import.id)
+      }
+      setProgress('Ставим приватный Reel в очередь…')
+      const created = await createReelCandidate(
+        projectId,
+        {
+          artist: artist.trim() || undefined,
+          title: title.trim() || undefined,
+          region: language,
+          language,
+        },
+        idempotencyKey.current,
+      )
+      window.location.assign(created.studio_url)
+    } catch (generationError) {
+      setError(
+        generationError instanceof Error
+          ? generationError.message
+          : 'Не удалось запустить Reel.',
+      )
+      setProgress('')
+    }
+  }
+
+  const sourceReady = sourceMode === 'file'
+    ? Boolean(file)
+    : /^https:\/\//i.test(sourceUrl.trim())
+
+  return (
+    <section className="reels-create-panel">
+      <div className="reels-create-copy">
+        <p className="eyebrow">Owner generation</p>
+        <h2>Новый приватный Reel</h2>
+        <p>
+          Добавьте песню ссылкой или файлом. Результат придёт в Telegram и
+          останется в Studio; публикация выключена.
+        </p>
+        <small>Одновременно — не больше {activeLimit} активных задач.</small>
+      </div>
+      <div className="reels-create-form">
+        <div className="reels-source-tabs" role="tablist" aria-label="Источник песни">
+          <button
+            className={sourceMode === 'link' ? 'is-active' : ''}
+            type="button"
+            onClick={() => { setSourceMode('link'); setError('') }}
+          >Ссылка</button>
+          <button
+            className={sourceMode === 'file' ? 'is-active' : ''}
+            type="button"
+            onClick={() => { setSourceMode('file'); setError('') }}
+          >Файл</button>
+        </div>
+        {sourceMode === 'link' ? (
+          <label className="reels-create-wide">
+            <span>Ссылка на песню</span>
+            <input
+              placeholder="https://music.youtube.com/…"
+              type="url"
+              value={sourceUrl}
+              onChange={(event) => setSourceUrl(event.target.value)}
+            />
+          </label>
+        ) : (
+          <div className="reels-create-wide reels-file-picker">
+            <input
+              ref={inputRef}
+              accept={REEL_ACCEPTED_AUDIO}
+              hidden
+              type="file"
+              onChange={(event) => chooseFile(event.target.files?.[0])}
+            />
+            <button type="button" onClick={() => inputRef.current?.click()}>
+              {file ? file.name : 'Выбрать аудиофайл до 20 МБ'}
+            </button>
+          </div>
+        )}
+        <label>
+          <span>Исполнитель <i>необязательно</i></span>
+          <input value={artist} onChange={(event) => setArtist(event.target.value)} />
+        </label>
+        <label>
+          <span>Название <i>необязательно</i></span>
+          <input value={title} onChange={(event) => setTitle(event.target.value)} />
+        </label>
+        <label>
+          <span>Язык</span>
+          <select
+            value={language}
+            onChange={(event) => setLanguage(event.target.value as 'ru' | 'en')}
+          >
+            <option value="ru">Русский</option>
+            <option value="en">English</option>
+          </select>
+        </label>
+        <button
+          className="reels-primary"
+          disabled={!sourceReady || Boolean(progress)}
+          type="button"
+          onClick={() => void startGeneration()}
+        >
+          {progress || 'Сгенерировать приватно'}
+        </button>
+        {error && <p className="reels-error reels-create-wide">{error}</p>}
+      </div>
+    </section>
   )
 }
 
@@ -274,7 +507,8 @@ function ReelDetail({
   }, [candidateId])
 
   useEffect(() => {
-    void load()
+    const timeout = window.setTimeout(() => void load(), 0)
+    return () => window.clearTimeout(timeout)
   }, [load])
 
   const selectedRender = useMemo(
@@ -284,17 +518,20 @@ function ReelDetail({
 
   useEffect(() => {
     if (!selectedRender) return
-    setSettings({
-      clip_start_seconds: selectedRender.settings.clip_start_seconds ?? 0,
-      duration_seconds: selectedRender.settings.duration_seconds ?? 22,
-      transition_seconds: selectedRender.settings.transition_seconds ?? 12.3,
-      crossfade_seconds: selectedRender.settings.crossfade_seconds ?? 1.2,
-      hook_text: selectedRender.settings.hook_text ?? '',
-      cta_text: selectedRender.settings.cta_text ?? '',
-    })
-    const review = candidate?.reviews.find((item) => item.render_id === selectedRender.id)
-    setReviewVerdict(review?.verdict ?? 'good')
-    setReviewComment(review?.comment ?? '')
+    const timeout = window.setTimeout(() => {
+      setSettings({
+        clip_start_seconds: selectedRender.settings.clip_start_seconds ?? 0,
+        duration_seconds: selectedRender.settings.duration_seconds ?? 22,
+        transition_seconds: selectedRender.settings.transition_seconds ?? 12.3,
+        crossfade_seconds: selectedRender.settings.crossfade_seconds ?? 1.2,
+        hook_text: selectedRender.settings.hook_text ?? '',
+        cta_text: selectedRender.settings.cta_text ?? '',
+      })
+      const review = candidate?.reviews.find((item) => item.render_id === selectedRender.id)
+      setReviewVerdict(review?.verdict ?? 'good')
+      setReviewComment(review?.comment ?? '')
+    }, 0)
+    return () => window.clearTimeout(timeout)
   }, [candidate?.reviews, selectedRender])
 
   async function action(name: string, task: () => Promise<void>) {
@@ -335,7 +572,9 @@ function ReelDetail({
             <span className={`reels-status reels-status--${candidate.status}`}>
               {statusLabel(candidate.status)}
             </span>
-            <a href={candidate.source_url} rel="noreferrer" target="_blank">Открыть источник ↗</a>
+            {/^https:\/\//i.test(candidate.source_url)
+              ? <a href={candidate.source_url} rel="noreferrer" target="_blank">Открыть источник ↗</a>
+              : <span>Личный аудиофайл</span>}
             <small>Автопубликация: {formatDate(candidate.auto_publish_at)}</small>
           </div>
         </section>
@@ -392,7 +631,13 @@ function ReelDetail({
         </section>
 
         {selectedRender && (
-          <><section className="reels-controls">
+          <><section className="reels-download-bar">
+            <span>Выбранный вариант готов для приватного использования.</span>
+            {selectedRender.preview_url && (
+              <a href={reelDownloadUrl(selectedRender.preview_url)}>Скачать MP4 ↓</a>
+            )}
+          </section>
+          <section className="reels-controls">
             <div>
               <p className="eyebrow">Fine tune</p>
               <h2>{VARIANT_LABELS[selectedRender.variant] ?? selectedRender.variant}</h2>

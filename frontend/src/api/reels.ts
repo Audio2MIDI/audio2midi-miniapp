@@ -17,14 +17,23 @@ export type ReelStatus =
 export interface ReelsCapabilities {
   enabled: boolean
   rollout: 'off' | 'allowlist' | 'all'
+  manual_generation_enabled: boolean
+  manual_active_limit: number
   default_duration_seconds: number
   preview_window_seconds: number
   publish_actions_enabled: boolean
   variants: string[]
 }
 
+export interface ReelCandidateCreateResponse {
+  created: boolean
+  candidate: ReelCandidateSummary
+  studio_url: string
+}
+
 export interface ReelCandidateSummary {
   id: string
+  origin: 'trend' | 'owner_manual'
   artist: string
   title: string
   region: 'ru' | 'en'
@@ -123,6 +132,23 @@ export async function getReelCandidate(id: string): Promise<ReelCandidate> {
     `/v1/internal/reels/candidates/${id}`,
   )
   return response.candidate
+}
+
+export async function createReelCandidate(
+  projectId: string,
+  input: {
+    artist?: string
+    title?: string
+    region: 'ru' | 'en'
+    language: 'ru' | 'en'
+  },
+  idempotencyKey: string,
+): Promise<ReelCandidateCreateResponse> {
+  return post<ReelCandidateCreateResponse>(
+    '/v1/internal/reels/candidates',
+    { project_id: projectId, ...input },
+    { headers: { 'Idempotency-Key': idempotencyKey } },
+  )
 }
 
 export async function updateReelRender(

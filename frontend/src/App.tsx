@@ -60,7 +60,16 @@ function App() {
   }
 
   const reelsMatch = window.location.pathname.match(/^\/internal\/reels(?:\/([0-9a-f-]+))?$/i)
-  if (reelsMatch) return route(<ReelsStudio candidateId={reelsMatch[1]} colorScheme={colorScheme} />)
+  if (reelsMatch) {
+    if (isLoading) return <ProductLoading />
+    return route(
+      <ReelsStudio
+        candidateId={reelsMatch[1]}
+        colorScheme={colorScheme}
+        initData={initData}
+      />,
+    )
+  }
   if (window.location.pathname === '/internal/analytics') return route(<AnalyticsDashboard colorScheme={colorScheme} />)
   if (isLoading) return <ProductLoading />
 
