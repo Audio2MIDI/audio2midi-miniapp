@@ -8,6 +8,7 @@
  */
 
 const BASE_URL = '/api';
+const NETWORK_ERROR_MESSAGE = 'Не удалось связаться с сервером. Проверьте интернет и попробуйте ещё раз.';
 
 /** Thrown on non-2xx responses or network failures. */
 export class ApiError extends Error {
@@ -19,6 +20,18 @@ export class ApiError extends Error {
     this.name = 'ApiError';
     this.status = status;
     this.body = body;
+  }
+}
+
+/** Convert browser-specific network errors such as "Failed to fetch" into product copy. */
+export async function fetchWithNetworkError(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Response> {
+  try {
+    return await fetch(input, init);
+  } catch {
+    throw new ApiError(NETWORK_ERROR_MESSAGE, 0);
   }
 }
 
@@ -75,7 +88,7 @@ export async function get<T>(
       }
     }
   }
-  const response = await fetch(url.toString(), {
+  const response = await fetchWithNetworkError(url.toString(), {
     method: 'GET',
     headers: buildHeaders(),
     credentials: 'include',
@@ -100,7 +113,7 @@ export async function post<T>(
     fetchBody = JSON.stringify(body);
   }
 
-  const response = await fetch(`${BASE_URL}${path}`, {
+  const response = await fetchWithNetworkError(`${BASE_URL}${path}`, {
     method: 'POST',
     headers,
     body: fetchBody,
@@ -118,7 +131,7 @@ export async function patch<T>(
   body: Record<string, unknown>,
 ): Promise<T> {
   const headers = buildHeaders({ 'Content-Type': 'application/json' });
-  const response = await fetch(`${BASE_URL}${path}`, {
+  const response = await fetchWithNetworkError(`${BASE_URL}${path}`, {
     method: 'PATCH',
     headers,
     body: JSON.stringify(body),
@@ -129,7 +142,7 @@ export async function patch<T>(
 
 /** DELETE request. */
 export async function del(path: string): Promise<void> {
-  const response = await fetch(`${BASE_URL}${path}`, {
+  const response = await fetchWithNetworkError(`${BASE_URL}${path}`, {
     method: 'DELETE',
     headers: buildHeaders(),
     credentials: 'include',
