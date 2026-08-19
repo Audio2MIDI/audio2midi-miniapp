@@ -1,4 +1,4 @@
-import { del, get, patch, post } from './client'
+import { del, fetchWithNetworkError, get, patch, post } from './client'
 import type {
   AccountResponse,
   AuthenticationResponse,
@@ -153,7 +153,7 @@ export async function uploadProjectSource(
   requiredHeaders: Record<string, string>,
 ): Promise<void> {
   const uploadOrigin = new URL(uploadUrl, window.location.origin).origin
-  const response = await fetch(uploadUrl, {
+  const response = await fetchWithNetworkError(uploadUrl, {
     method: 'PUT',
     headers: requiredHeaders,
     body: file,
