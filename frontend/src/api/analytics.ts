@@ -179,6 +179,15 @@ export function downloadIntentUrl(
   return url.toString()
 }
 
+export function visualizerUrl(
+  downloadUrl: string,
+  origin = typeof window === 'undefined' ? 'https://app.audio2midi.ru' : window.location.origin,
+): string {
+  const contentUrl = new URL(downloadUrl, origin)
+  contentUrl.searchParams.set('intent', 'visualizer')
+  return `/visualizer?file=${encodeURIComponent(contentUrl.toString())}`
+}
+
 export function visualizerAnalyticsTarget(fileUrl?: string | null): {
   objectType?: 'artifact' | 'legacy_result'
   objectId?: string

@@ -16,6 +16,7 @@ import {
   getAnalyticsAccess,
   trackProductEvent,
   type AnalyticsRole,
+  visualizerUrl,
 } from '../api/analytics'
 import type { AccountNotification, AccountSummary, LibraryItem } from '../api/types'
 import { telegramLoginUrl } from '../routing'
@@ -95,11 +96,6 @@ function subscriptionLabel(account: AccountSummary): string {
     day: 'numeric',
     month: 'long',
   }).format(until)}`
-}
-
-function visualizerUrl(downloadUrl: string): string {
-  const absoluteDownload = new URL(downloadUrl, window.location.origin).toString()
-  return `/visualizer?file=${encodeURIComponent(absoluteDownload)}`
 }
 
 function ResultRow({ item, editorEnabled }: { item: LibraryItem; editorEnabled: boolean }) {
