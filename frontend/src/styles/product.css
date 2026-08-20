@@ -161,6 +161,29 @@
 .funnel-list strong, .funnel-list small { text-align: right; font-variant-numeric: tabular-nums; }
 .funnel-list strong { font-size: 14px; font-weight: 600; }
 .funnel-list small { color: var(--product-muted); }
+.analytics-footnote { margin: 12px 0 0; color: var(--product-muted-soft); font-size: 11px; line-height: 1.6; }
+
+.analytics-flow-strip,
+.analytics-monetization-line {
+  display: flex;
+  border-block: 1px solid var(--product-border);
+}
+.analytics-flow-strip > div,
+.analytics-monetization-line > div {
+  min-width: 0;
+  flex: 1;
+  padding: 17px 20px;
+  border-right: 1px solid var(--product-border);
+}
+.analytics-flow-strip > div:first-child,
+.analytics-monetization-line > div:first-child { padding-left: 0; }
+.analytics-flow-strip > div:last-child,
+.analytics-monetization-line > div:last-child { border-right: 0; }
+.analytics-flow-strip span,
+.analytics-flow-strip small,
+.analytics-monetization-line span { display: block; color: var(--product-muted); font-size: 11px; }
+.analytics-flow-strip strong,
+.analytics-monetization-line strong { display: block; margin: 5px 0; font-size: 21px; font-weight: 550; font-variant-numeric: tabular-nums; }
 
 .quality-list { margin: 0; border-top: 1px solid var(--product-border); }
 .quality-list > div { display: flex; min-height: 43px; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--product-border); }
@@ -201,6 +224,11 @@
   .analytics-source-card, .analytics-source-card:first-child { padding: 18px 0; border-right: 0; border-bottom: 1px solid var(--product-border); }
   .analytics-source-card:last-child { border-bottom: 0; }
   .analytics-source-card p { min-height: 0; }
+  .analytics-monetization-line { display: grid; grid-template-columns: 1fr 1fr; }
+  .analytics-monetization-line > div { border-bottom: 1px solid var(--product-border); }
+  .analytics-monetization-line > div:nth-child(2) { border-right: 0; }
+  .analytics-monetization-line > div:nth-child(3) { padding-left: 0; }
+  .analytics-monetization-line > div:nth-last-child(-n+2) { border-bottom: 0; }
   .revenue-row { grid-template-columns: 64px 72px 1fr 100px; }
   .revenue-row small { display: none; }
 }
@@ -213,6 +241,10 @@
   .analytics-kpis > div:nth-child(3) { padding-left: 0; }
   .funnel-list li { grid-template-columns: minmax(115px, 1fr) 48px 38px; }
   .funnel-list li > i { display: none; }
+  .analytics-flow-strip { display: block; }
+  .analytics-flow-strip > div,
+  .analytics-flow-strip > div:first-child { padding: 14px 0; border-right: 0; border-bottom: 1px solid var(--product-border); }
+  .analytics-flow-strip > div:last-child { border-bottom: 0; }
   .revenue-row { grid-template-columns: 58px 65px 1fr; }
   .revenue-row i { display: none; }
 }

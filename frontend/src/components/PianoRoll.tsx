@@ -3,6 +3,7 @@ import { Midi } from '@tonejs/midi'
 import * as Tone from 'tone'
 import { fetchLatestMidi } from '../api/midi'
 import { ApiError } from '../api/client'
+import { trackSuccessfulVisualizerLoad } from '../api/analytics'
 
 /* ── constants ── */
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
@@ -68,6 +69,7 @@ const PianoRoll: React.FC<PianoRollProps> = ({ midiParam, fileUrl, userId, initD
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const animFrameRef = useRef<number>(0)
+  const trackedMidiSourcesRef = useRef(new Set<string>())
 
   const [midi, setMidi] = useState<Midi | null>(null)
   const [notes, setNotes] = useState<MidiNote[]>([])
@@ -165,11 +167,13 @@ const PianoRoll: React.FC<PianoRollProps> = ({ midiParam, fileUrl, userId, initD
       }
 
       stopPlayback()
+      const trackingKey = fileUrl || midiParam || `local:${name}`
+      trackSuccessfulVisualizerLoad(trackedMidiSourcesRef.current, trackingKey, fileUrl)
     } catch (e) {
       console.error('Failed to parse MIDI:', e)
       alert('Не удалось прочитать MIDI файл')
     }
-  }, [noteHeight, orientation, stopPlayback])
+  }, [fileUrl, midiParam, noteHeight, orientation, stopPlayback])
 
   /* ── file input ── */
   const handleFile = useCallback((file: File) => {

@@ -11,7 +11,12 @@ import {
   materializeEditorProject,
 } from '../api/account'
 import { ApiError } from '../api/client'
-import { getAnalyticsAccess, trackProductEvent, type AnalyticsRole } from '../api/analytics'
+import {
+  downloadIntentUrl,
+  getAnalyticsAccess,
+  trackProductEvent,
+  type AnalyticsRole,
+} from '../api/analytics'
 import type { AccountNotification, AccountSummary, LibraryItem } from '../api/types'
 import { telegramLoginUrl } from '../routing'
 import EmailAuthForm from './EmailAuthForm'
@@ -107,11 +112,6 @@ function ResultRow({ item, editorEnabled }: { item: LibraryItem; editorEnabled: 
       : undefined
   const [openingEditor, setOpeningEditor] = useState(false)
   const [editorError, setEditorError] = useState('')
-  const opened = () => void trackProductEvent('result.opened', {
-    objectType: item.source === 'job' ? 'job' : 'legacy_result',
-    objectId: item.id,
-    properties: { engine: item.engine, result_kind: item.source, surface: 'library' },
-  })
 
   async function openEditor() {
     if (!midi || openingEditor) return
@@ -150,27 +150,20 @@ function ResultRow({ item, editorEnabled }: { item: LibraryItem; editorEnabled: 
       </div>
       <StatusBadge status={item.status}>{STATUS_NAMES[item.status] ?? item.status}</StatusBadge>
       {primaryUrl ? (
-        <a className="result-card__open" href={primaryUrl} onClick={opened}>Открыть</a>
+        <a className="result-card__open" href={primaryUrl}>Открыть</a>
       ) : <span />}
       <details className="result-menu">
         <summary aria-label={`Действия: ${item.title}`}>•••</summary>
         <div className="result-menu__content">
-          {primaryUrl && <a href={primaryUrl} onClick={opened}>Открыть композицию</a>}
-          {midi && <a href={visualizerUrl(midi.download_url)} onClick={() => void trackProductEvent('visualizer.opened', {
-            objectType: item.source === 'job' ? 'job' : 'legacy_result',
-            objectId: item.id,
-            properties: { engine: item.engine, surface: 'library' },
-          })}>Открыть визуализацию</a>}
+          {primaryUrl && <a href={primaryUrl}>Открыть композицию</a>}
+          {midi && <a href={visualizerUrl(midi.download_url)}>Открыть визуализацию</a>}
           {midi && editorEnabled && (
             <button disabled={openingEditor} onClick={() => void openEditor()} type="button">
               {openingEditor ? 'Открываем…' : 'Редактировать MIDI'}
             </button>
           )}
           {item.artifacts.map((entry) => (
-            <a href={entry.download_url} key={entry.id} rel="noreferrer" onClick={() => void trackProductEvent('result.downloaded', {
-              objectType: 'artifact', objectId: entry.id,
-              properties: { engine: item.engine, result_kind: entry.role, surface: 'library' },
-            })}>
+            <a href={downloadIntentUrl(entry.download_url)} key={entry.id} rel="noreferrer">
               {ARTIFACT_NAMES[entry.role] ?? `Скачать ${entry.role}`}
             </a>
           ))}
