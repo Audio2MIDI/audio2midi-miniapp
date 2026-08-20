@@ -4,6 +4,7 @@ import {
   downloadIntentUrl,
   trackSuccessfulVisualizerLoad,
   visualizerAnalyticsTarget,
+  visualizerUrl,
 } from './analytics'
 
 describe('product analytics boundaries', () => {
@@ -21,6 +22,18 @@ describe('product analytics boundaries', () => {
     expect(visualizerAnalyticsTarget('/api/v1/me/legacy-results/42/midi')).toEqual({
       objectType: 'legacy_result', objectId: '42', sourceKind: 'legacy',
     })
+  })
+
+  it('uses a same-origin visualizer intent without claiming a download', () => {
+    const pageUrl = visualizerUrl(
+      '/api/v1/me/artifacts/39e98b06-55fd-49f6-87f5-961b760af383/download',
+      'https://app.audio2midi.ru',
+    )
+    const contentUrl = new URL(new URL(pageUrl, 'https://app.audio2midi.ru').searchParams.get('file')!)
+
+    expect(contentUrl.origin).toBe('https://app.audio2midi.ru')
+    expect(contentUrl.searchParams.get('intent')).toBe('visualizer')
+    expect(contentUrl.searchParams.get('intent')).not.toBe('download')
   })
 
   it('emits once only after the successful MIDI parse path calls it', () => {

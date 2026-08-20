@@ -9,7 +9,7 @@ import {
   sendProjectFeedback,
 } from '../api/account'
 import { ApiError } from '../api/client'
-import { downloadIntentUrl, trackProductEvent } from '../api/analytics'
+import { downloadIntentUrl, trackProductEvent, visualizerUrl } from '../api/analytics'
 import type { LibraryArtifact, ProjectDetail } from '../api/types'
 import { PageHeading, ProductHeader, ProductLoading, StatusBadge } from './ProductFrame'
 
@@ -36,11 +36,6 @@ const ARTIFACT_LABELS: Record<string, string> = {
   pdf: 'Партитура PDF', mp3: 'Аудио MP3', wav: 'Аудио WAV', full_audio: 'Полное аудио',
   preview_mp3: 'Демо 30 секунд', vocals: 'Вокал', accompaniment: 'Инструментал',
   video: 'Видео', transcript: 'Текст', native_pdf: 'Оригинальная партитура', native_lilypond: 'LilyPond',
-}
-
-function visualizerUrl(downloadUrl: string): string {
-  const absolute = new URL(downloadUrl, window.location.origin).toString()
-  return `/visualizer?file=${encodeURIComponent(absolute)}`
 }
 
 function artifact(artifacts: LibraryArtifact[], role: string) {
