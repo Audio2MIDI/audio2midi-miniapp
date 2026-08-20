@@ -34,16 +34,46 @@ export interface AnalyticsOverview {
   }
   data_freshness: { refreshed_through: string | null; updated_at: string | null }
 }
-export interface AnalyticsFunnel { range: AnalyticsRange; stages: Array<{ stage: string; count: number }> }
-export interface AnalyticsRetention { range: AnalyticsRange; cohorts: Array<{ cohort_date: string; cohort_size: number; d1: number; d7: number; r7: number; d30: number; r30: number }> }
-export interface AnalyticsPayments { range: AnalyticsRange; daily: Array<{ day: string; channel: string; paid: number; gross_kopek: number; authorized: number; failed: number }>; intents: Array<{ channel: string; status: string; count: number }> }
+export interface AnalyticsFunnel {
+  range: AnalyticsRange
+  stages: Array<{ stage: string; flows: number; accounts: number; count: number }>
+  segments: Array<{
+    channel: 'telegram' | 'web'; engine: string; submitted: number; ready: number; consumed: number
+    ready_rate: number | null; consumption_rate: number | null
+    exact_latency_sample: number; p50_seconds: number | null; p95_seconds: number | null
+  }>
+  secondary_flows: Array<{ flow_kind: 'video' | 'editor_export'; submitted: number; ready: number; failed: number; accounts: number }>
+}
+export interface AnalyticsRetention {
+  range: AnalyticsRange
+  cohorts: Array<{
+    cohort_date: string; cohort_size: number
+    d1: number | null; d7: number | null; r7: number | null; d30: number | null; r30: number | null
+  }>
+}
+export interface AnalyticsPayments {
+  range: AnalyticsRange
+  totals: {
+    created_intents: number; confirmed_payments: number; revenue_kopek: number
+    paying_accounts: number; accounts_paid_after_free: number
+  }
+  daily: Array<{
+    day: string; channel: string; created_intents: number
+    paid: number; gross_kopek: number; failed: number
+  }>
+  intents: Array<{ channel: string; status: string; count: number }>
+}
 export interface AnalyticsQuality { range: AnalyticsRange; segments: Array<{ channel: string; engine: string; responses: number; average_rating: number | null; negative: number; positive: number }> }
 export interface AnalyticsDataQuality { checks: Record<string, number | null>; statuses: Record<string, 'ok' | 'alert'>; generated_at: string }
 export interface AnalyticsSurfaces {
   range: AnalyticsRange
-  surfaces: Array<{ event_name: string; events: number; unique_accounts: number; active_days: number }>
+  surfaces: Array<{
+    event_name: string; events: number; unique_accounts: number; active_days: number
+    coverage_started_at: string | null
+  }>
   funnel: { workspace: number; project: number; visualizer: number; editor: number; published: number }
   feedback: { shown: number; submitted: number; response_rate: number | null }
+  coverage: Record<string, string | null>
 }
 export interface AnalyticsReels {
   range: AnalyticsRange
@@ -69,8 +99,6 @@ export interface AnalyticsBundle {
   quality: AnalyticsQuality
   dataQuality: AnalyticsDataQuality
   surfaces: AnalyticsSurfaces
-  reels: AnalyticsReels
-  outreach: { items: OutreachItem[]; message_template: string } | null
 }
 
 export async function getAnalyticsAccess(): Promise<{ role: AnalyticsRole }> {
@@ -88,45 +116,104 @@ export async function updateOutreachStatus(
   })
 }
 
-export async function getAnalyticsBundle(params: { from: string; to: string; channel?: string }): Promise<AnalyticsBundle> {
+export async function getAnalyticsBundle(params: { from: string; to: string; channel?: string; engine?: string }): Promise<AnalyticsBundle> {
   const productParams = {
     from: params.from,
     to: params.to,
     channel: params.channel === 'telegram' || params.channel === 'web' ? params.channel : undefined,
+    engine: params.engine || undefined,
   }
   const access = await getAnalyticsAccess()
-  const [overview, funnel, retention, payments, quality, dataQuality, surfaces, reels, outreach] = await Promise.all([
+  const [overview, funnel, retention, payments, quality, dataQuality, surfaces] = await Promise.all([
     get<AnalyticsOverview>('/v1/admin/analytics/overview', params),
     get<AnalyticsFunnel>('/v1/admin/analytics/funnel', productParams),
     get<AnalyticsRetention>('/v1/admin/analytics/retention', productParams),
-    get<AnalyticsPayments>('/v1/admin/analytics/payments', params),
+    get<AnalyticsPayments>('/v1/admin/analytics/payments', {
+      from: params.from, to: params.to, channel: productParams.channel,
+    }),
     get<AnalyticsQuality>('/v1/admin/analytics/quality', productParams),
     get<AnalyticsDataQuality>('/v1/admin/analytics/data-quality'),
     get<AnalyticsSurfaces>('/v1/admin/analytics/surfaces', { from: params.from, to: params.to }),
-    get<AnalyticsReels>('/v1/admin/analytics/reels', { from: params.from, to: params.to }),
-    access.role === 'owner'
-      ? get<{ items: OutreachItem[]; message_template: string }>('/v1/admin/analytics/outreach')
-      : Promise.resolve(null),
   ])
-  return { role: access.role, overview, funnel, retention, payments, quality, dataQuality, surfaces, reels, outreach }
+  return { role: access.role, overview, funnel, retention, payments, quality, dataQuality, surfaces }
 }
 
 function analyticsSessionId(): string {
   const key = 'a2m_analytics_session_id'
-  const existing = sessionStorage.getItem(key)
-  if (existing) return existing
-  const value = crypto.randomUUID()
-  sessionStorage.setItem(key, value)
-  return value
+  try {
+    const existing = sessionStorage.getItem(key)
+    if (existing) return existing
+    const value = crypto.randomUUID()
+    sessionStorage.setItem(key, value)
+    return value
+  } catch {
+    return crypto.randomUUID()
+  }
 }
 
-export async function trackProductEvent(
-  eventName:
-    | 'result.opened' | 'result.downloaded' | 'paywall.shown' | 'session.authenticated'
-    | 'workspace.opened' | 'project.opened' | 'visualizer.opened'
-    | 'editor.opened' | 'editor.draft_saved' | 'editor.version_published'
-    | 'feedback.prompt_shown' | 'feedback.prompt_dismissed',
-  input: { objectType?: string; objectId?: string; properties?: Record<string, unknown> } = {},
+type ProductEventInput = {
+  'workspace.opened': {
+    objectType?: undefined; objectId?: undefined; properties: { surface: 'library' }
+  }
+  'project.opened': {
+    objectType: 'project'; objectId: string; properties: { surface: 'project' }
+  }
+  'visualizer.opened': {
+    objectType?: 'artifact' | 'legacy_result'; objectId?: string
+    properties: { surface: 'visualizer'; engine?: string; source_kind: 'artifact' | 'legacy' | 'local' }
+  }
+  'feedback.prompt_shown': {
+    objectType: 'project'; objectId: string; properties: { surface: 'project' }
+  }
+  'feedback.prompt_dismissed': {
+    objectType: 'project'; objectId: string; properties: { surface: 'project' }
+  }
+}
+
+export function downloadIntentUrl(
+  downloadUrl: string,
+  origin = typeof window === 'undefined' ? 'https://app.audio2midi.ru' : window.location.origin,
+): string {
+  const url = new URL(downloadUrl, origin)
+  url.searchParams.set('intent', 'download')
+  return url.toString()
+}
+
+export function visualizerAnalyticsTarget(fileUrl?: string | null): {
+  objectType?: 'artifact' | 'legacy_result'
+  objectId?: string
+  sourceKind: 'artifact' | 'legacy' | 'local'
+} {
+  if (!fileUrl) return { sourceKind: 'local' }
+  const artifact = fileUrl.match(/\/artifacts\/([0-9a-f-]{36})\/download(?:[?#]|$)/i)
+  if (artifact) return { objectType: 'artifact', objectId: artifact[1], sourceKind: 'artifact' }
+  const legacy = fileUrl.match(/\/legacy-results\/([1-9][0-9]*)\/midi(?:[?#]|$)/i)
+  if (legacy) return { objectType: 'legacy_result', objectId: legacy[1], sourceKind: 'legacy' }
+  return { sourceKind: 'legacy' }
+}
+
+export function trackSuccessfulVisualizerLoad(
+  trackedSources: Set<string>,
+  sourceKey: string,
+  fileUrl?: string | null,
+  emit: (input: ProductEventInput['visualizer.opened']) => void = (input) => {
+    void trackProductEvent('visualizer.opened', input)
+  },
+): boolean {
+  if (trackedSources.has(sourceKey)) return false
+  trackedSources.add(sourceKey)
+  const target = visualizerAnalyticsTarget(fileUrl)
+  emit({
+    objectType: target.objectType,
+    objectId: target.objectId,
+    properties: { surface: 'visualizer', source_kind: target.sourceKind },
+  })
+  return true
+}
+
+export async function trackProductEvent<EventName extends keyof ProductEventInput>(
+  eventName: EventName,
+  input: ProductEventInput[EventName],
 ): Promise<void> {
   try {
     await post<void>('/v1/me/events', {

@@ -9,7 +9,7 @@ import {
   sendProjectFeedback,
 } from '../api/account'
 import { ApiError } from '../api/client'
-import { trackProductEvent } from '../api/analytics'
+import { downloadIntentUrl, trackProductEvent } from '../api/analytics'
 import type { LibraryArtifact, ProjectDetail } from '../api/types'
 import { PageHeading, ProductHeader, ProductLoading, StatusBadge } from './ProductFrame'
 
@@ -239,9 +239,7 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
                 ) : <p>Аудиоверсия готовится или недоступна для этого результата.</p>}
                 {midi && (
                   <div className="workspace-actions">
-                    <a className="primary-action" href={visualizerUrl(midi.download_url)} onClick={() => void trackProductEvent('visualizer.opened', {
-                      objectType: 'project', objectId: project.id, properties: { engine: latest?.engine, surface: 'project' },
-                    })}>Открыть визуализацию</a>
+                    <a className="primary-action" href={visualizerUrl(midi.download_url)}>Открыть визуализацию</a>
                     {editorEnabled && <a className="secondary-action" href={`/editor/${project.id}`}>Редактировать</a>}
                     {editorEnabled && initData && (
                       <button className="secondary-action" disabled={browserBusy} onClick={() => void openFullEditor()} type="button">
@@ -282,7 +280,7 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
               <div className="section-heading"><h2>Скачать</h2><span>{artifacts.length} файлов</span></div>
               <div className="project-files">
                 {artifacts.filter((item) => item.role !== 'archive').map((item) => (
-                  <a href={item.download_url} key={item.id}>
+                  <a href={downloadIntentUrl(item.download_url)} key={item.id}>
                     <span aria-hidden="true">{item.role.includes('midi') ? '♪' : item.role.includes('pdf') ? '▤' : '▶'}</span>
                     <div><strong>{ARTIFACT_LABELS[item.role] ?? item.role}</strong><small>{item.size_bytes ? `${(item.size_bytes / 1024 / 1024).toFixed(1)} МБ` : 'Готово к скачиванию'}</small></div>
                     <em>↓</em>

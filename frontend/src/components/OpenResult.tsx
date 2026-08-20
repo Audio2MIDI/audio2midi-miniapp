@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 
 import { authenticateWithTelegram, materializeEditorProject } from '../api/account'
 import { ApiError } from '../api/client'
-import { trackProductEvent } from '../api/analytics'
 import { ProductLoading } from './ProductFrame'
 
 interface OpenResultProps {
@@ -41,11 +40,6 @@ export default function OpenResult({ itemId, initData, colorScheme }: OpenResult
           materialized = await materializeEditorProject(itemId)
         }
         if (cancelled) return
-        void trackProductEvent('result.opened', {
-          objectType: 'project',
-          objectId: materialized.project_id,
-          properties: { surface: 'telegram_result', created: materialized.created },
-        })
         window.location.replace(`/tracks/${materialized.project_id}`)
       } catch (openError) {
         if (!cancelled) setError(messageFor(openError))
