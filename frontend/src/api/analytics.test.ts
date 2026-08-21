@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   downloadIntentUrl,
+  trackReadyProjectOpen,
   trackSuccessfulVisualizerLoad,
   visualizerAnalyticsTarget,
   visualizerUrl,
@@ -47,6 +48,21 @@ describe('product analytics boundaries', () => {
       objectType: undefined,
       objectId: undefined,
       properties: { surface: 'visualizer', source_kind: 'local' },
+    })
+  })
+
+  it('counts a project open once only after the result is ready', () => {
+    const tracked = new Set<string>()
+    const emit = vi.fn()
+
+    expect(trackReadyProjectOpen(tracked, 'project-1', 'processing', emit)).toBe(false)
+    expect(trackReadyProjectOpen(tracked, 'project-1', 'ready', emit)).toBe(true)
+    expect(trackReadyProjectOpen(tracked, 'project-1', 'ready', emit)).toBe(false)
+    expect(emit).toHaveBeenCalledTimes(1)
+    expect(emit).toHaveBeenCalledWith({
+      objectType: 'project',
+      objectId: 'project-1',
+      properties: { surface: 'project' },
     })
   })
 })

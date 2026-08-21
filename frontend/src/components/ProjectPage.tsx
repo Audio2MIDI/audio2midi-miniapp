@@ -9,7 +9,12 @@ import {
   sendProjectFeedback,
 } from '../api/account'
 import { ApiError } from '../api/client'
-import { downloadIntentUrl, trackProductEvent, visualizerUrl } from '../api/analytics'
+import {
+  downloadIntentUrl,
+  trackProductEvent,
+  trackReadyProjectOpen,
+  visualizerUrl,
+} from '../api/analytics'
 import type { LibraryArtifact, ProjectDetail } from '../api/types'
 import { PageHeading, ProductHeader, ProductLoading, StatusBadge } from './ProductFrame'
 
@@ -52,7 +57,7 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
   const [feedbackComment, setFeedbackComment] = useState('')
   const [feedbackSent, setFeedbackSent] = useState(false)
   const [feedbackVisible, setFeedbackVisible] = useState(false)
-  const projectOpenTracked = useRef(false)
+  const openedReadyProjects = useRef(new Set<string>())
 
   useEffect(() => {
     let cancelled = false
@@ -73,12 +78,7 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
         if (cancelled) return
         setProject(response.project)
         setFeedbackSent(response.project.feedback_submitted)
-        if (!projectOpenTracked.current) {
-          projectOpenTracked.current = true
-          void trackProductEvent('project.opened', {
-            objectType: 'project', objectId: projectId, properties: { surface: 'project' },
-          })
-        }
+        trackReadyProjectOpen(openedReadyProjects.current, projectId, response.project.status)
         const capabilities = await getEditorCapabilities().catch(() => null)
         if (!cancelled) setEditorEnabled(Boolean(capabilities?.enabled))
         setError('')

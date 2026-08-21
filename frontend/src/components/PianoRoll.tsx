@@ -94,6 +94,10 @@ const PianoRoll: React.FC<PianoRollProps> = ({ midiParam, fileUrl, userId, initD
 
   const noteHeight = NOTE_HEIGHT_BASE * zoom
   const pixelsPerSec = PIXELS_PER_SEC_BASE * zoom
+  const noteHeightRef = useRef(noteHeight)
+  const orientationRef = useRef(orientation)
+  noteHeightRef.current = noteHeight
+  orientationRef.current = orientation
 
   /* pitch range */
   const pitchRange = MAX_PITCH - MIN_PITCH + 1
@@ -155,12 +159,12 @@ const PianoRoll: React.FC<PianoRollProps> = ({ midiParam, fileUrl, userId, initD
           const canvasH = canvas.height / (window.devicePixelRatio || 1)
           const canvasW = canvas.width / (window.devicePixelRatio || 1)
           
-          if (orientation === 'horizontal') {
-            const yCenter = (MAX_PITCH - centerPitch) * noteHeight - canvasH / 2
+          if (orientationRef.current === 'horizontal') {
+            const yCenter = (MAX_PITCH - centerPitch) * noteHeightRef.current - canvasH / 2
             setScrollY(Math.max(0, yCenter))
           } else {
             // Vertical mode: center horizontally on pitch range
-            const xCenter = (centerPitch - MIN_PITCH) * noteHeight - (canvasW - PIANO_KEY_WIDTH) / 2
+            const xCenter = (centerPitch - MIN_PITCH) * noteHeightRef.current - (canvasW - PIANO_KEY_WIDTH) / 2
             setScrollX(Math.max(0, xCenter))
           }
         }
@@ -173,7 +177,7 @@ const PianoRoll: React.FC<PianoRollProps> = ({ midiParam, fileUrl, userId, initD
       console.error('Failed to parse MIDI:', e)
       alert('Не удалось прочитать MIDI файл')
     }
-  }, [fileUrl, midiParam, noteHeight, orientation, stopPlayback])
+  }, [fileUrl, midiParam, stopPlayback])
 
   /* ── file input ── */
   const handleFile = useCallback((file: File) => {
@@ -194,6 +198,7 @@ const PianoRoll: React.FC<PianoRollProps> = ({ midiParam, fileUrl, userId, initD
   useEffect(() => {
     // Need midiParam, fileUrl, or userId to auto-load
     if (!midiParam && !fileUrl && !userId) return
+    const controller = new AbortController()
     
     const loadFromSource = async () => {
       setIsAutoLoading(true)
@@ -202,7 +207,7 @@ const PianoRoll: React.FC<PianoRollProps> = ({ midiParam, fileUrl, userId, initD
       try {
         if (fileUrl) {
           // Direct URL mode (S3 link via ?file= param)
-          const response = await fetch(fileUrl)
+          const response = await fetch(fileUrl, { signal: controller.signal })
           if (!response.ok) {
             throw new Error(`Failed to fetch MIDI: HTTP ${response.status}`)
           }
@@ -227,6 +232,7 @@ const PianoRoll: React.FC<PianoRollProps> = ({ midiParam, fileUrl, userId, initD
           loadMidi(bytes.buffer, data.filename || `${midiParam}.mid`)
         }
       } catch (err) {
+        if (controller.signal.aborted) return
         if (err instanceof ApiError && err.status === 404) {
           // No MIDI found — not an error, just show empty state
           console.log('No MIDI found for', midiParam || userId)
@@ -238,8 +244,9 @@ const PianoRoll: React.FC<PianoRollProps> = ({ midiParam, fileUrl, userId, initD
         setIsAutoLoading(false)
       }
     }
-    
-    loadFromSource()
+
+    void loadFromSource()
+    return () => controller.abort()
   }, [midiParam, fileUrl, userId, initData, loadMidi])
 
   /* ── playback ── */
