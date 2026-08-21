@@ -220,6 +220,24 @@ export function trackSuccessfulVisualizerLoad(
   return true
 }
 
+export function trackReadyProjectOpen(
+  trackedProjectIds: Set<string>,
+  projectId: string,
+  status: string,
+  emit: (input: ProductEventInput['project.opened']) => void = (input) => {
+    void trackProductEvent('project.opened', input)
+  },
+): boolean {
+  if (status !== 'ready' || trackedProjectIds.has(projectId)) return false
+  trackedProjectIds.add(projectId)
+  emit({
+    objectType: 'project',
+    objectId: projectId,
+    properties: { surface: 'project' },
+  })
+  return true
+}
+
 export async function trackProductEvent<EventName extends keyof ProductEventInput>(
   eventName: EventName,
   input: ProductEventInput[EventName],
