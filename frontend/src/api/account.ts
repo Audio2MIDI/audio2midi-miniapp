@@ -219,11 +219,20 @@ export async function sendProjectFeedback(projectId: string, input: {
   })
 }
 
-export async function renderProjectVideo(projectId: string, versionId: string): Promise<void> {
+export type VideoAspectRatio = 'vertical' | 'horizontal'
+
+export async function renderProjectVideo(
+  projectId: string,
+  versionId: string,
+  aspectRatio: VideoAspectRatio,
+): Promise<void> {
+  const idempotencyKey = aspectRatio === 'vertical'
+    ? `web-video-${versionId}`
+    : `web-video-horizontal-${versionId}`
   await post(
     `/v1/me/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/video`,
-    {},
-    { headers: { 'Idempotency-Key': `web-video-${versionId}` } },
+    { aspect_ratio: aspectRatio },
+    { headers: { 'Idempotency-Key': idempotencyKey } },
   )
 }
 

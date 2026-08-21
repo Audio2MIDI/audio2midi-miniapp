@@ -349,6 +349,28 @@ test('ready project prioritizes playback, visualization, editing and downloads',
   await page.screenshot({ path: 'artifacts/ui/project-desktop.png', fullPage: true })
 })
 
+test('horizontal video uses its own server contract on mobile', async ({ page }) => {
+  await mockApi(page)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto(`/tracks/${READY_PROJECT_ID}`)
+  await expect(page.getByRole('button', { name: 'Вертикальное 9:16' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Горизонтальное 16:9' })).toBeVisible()
+
+  const videoRequest = page.waitForRequest((request) => (
+    request.method() === 'POST' && request.url().endsWith('/versions/version-1/video')
+  ))
+  await expectNoOverflow(page)
+  await page.screenshot({ path: 'artifacts/ui/video-formats-mobile.png', fullPage: true })
+  const navigation = page.waitForNavigation()
+  await page.getByRole('button', { name: 'Горизонтальное 16:9' }).click()
+  const request = await videoRequest
+  await navigation
+
+  expect(request.postDataJSON()).toEqual({ aspect_ratio: 'horizontal' })
+  expect(request.headers()['idempotency-key']).toBe('web-video-horizontal-version-1')
+  await expectNoOverflow(page)
+})
+
 test('locked project explains that regeneration is unnecessary', async ({ page }) => {
   await mockApi(page, { project: projectFixture({ locked: true }) })
   await page.setViewportSize({ width: 390, height: 844 })

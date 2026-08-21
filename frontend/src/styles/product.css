@@ -1561,6 +1561,13 @@
 .project-tools {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.video-format-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 

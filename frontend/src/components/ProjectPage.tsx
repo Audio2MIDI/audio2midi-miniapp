@@ -8,6 +8,7 @@ import {
   renderProjectVideo,
   sendProjectFeedback,
 } from '../api/account'
+import type { VideoAspectRatio } from '../api/account'
 import { ApiError } from '../api/client'
 import {
   downloadIntentUrl,
@@ -51,7 +52,7 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
   const [project, setProject] = useState<ProjectDetail | null>(null)
   const [editorEnabled, setEditorEnabled] = useState(false)
   const [error, setError] = useState('')
-  const [videoBusy, setVideoBusy] = useState(false)
+  const [videoBusy, setVideoBusy] = useState<VideoAspectRatio | null>(null)
   const [browserBusy, setBrowserBusy] = useState(false)
   const [feedbackRating, setFeedbackRating] = useState(0)
   const [feedbackComment, setFeedbackComment] = useState('')
@@ -113,18 +114,18 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
   const playable = artifacts.filter((item) => ['mp3', 'wav', 'full_audio', 'preview_mp3', 'vocals', 'accompaniment'].includes(item.role))
   const locked = latest?.delivery_state === 'locked'
 
-  async function makeVideo() {
+  async function makeVideo(aspectRatio: VideoAspectRatio) {
     if (!latest || videoBusy) return
-    setVideoBusy(true)
+    setVideoBusy(aspectRatio)
     setError('')
     try {
-      await renderProjectVideo(projectId, latest.version_id)
+      await renderProjectVideo(projectId, latest.version_id, aspectRatio)
       window.location.reload()
     } catch (videoError) {
       setError(videoError instanceof ApiError && videoError.status === 402
         ? 'Сначала откройте полный результат.'
         : 'Не удалось запустить создание видео.')
-      setVideoBusy(false)
+      setVideoBusy(null)
     }
   }
 
@@ -287,9 +288,14 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
             <section className="project-section">
               <div className="section-heading"><h2>Другие действия</h2></div>
               <div className="project-tools">
-                <button className="secondary-action" disabled={!midi || videoBusy} onClick={() => void makeVideo()} type="button">
-                  {videoBusy ? 'Запускаем…' : 'Сделать видео'}
-                </button>
+                <div aria-label="Формат видео" className="video-format-actions" role="group">
+                  <button className="secondary-action" disabled={!midi || Boolean(videoBusy)} onClick={() => void makeVideo('vertical')} type="button">
+                    {videoBusy === 'vertical' ? 'Запускаем…' : 'Вертикальное 9:16'}
+                  </button>
+                  <button className="secondary-action" disabled={!midi || Boolean(videoBusy)} onClick={() => void makeVideo('horizontal')} type="button">
+                    {videoBusy === 'horizontal' ? 'Запускаем…' : 'Горизонтальное 16:9'}
+                  </button>
+                </div>
                 <a className="secondary-action" href="/new">Обработать другую композицию</a>
               </div>
               {error && <p className="studio-error" role="alert">{error}</p>}
