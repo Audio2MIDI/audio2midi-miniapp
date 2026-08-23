@@ -69,6 +69,7 @@ function projectFixture(options: { status?: 'ready' | 'queued' | 'processing' | 
       started_at: ready ? '2026-08-02T18:21:00Z' : null,
       finished_at: ready ? '2026-08-02T18:24:00Z' : null,
       sanitized_error: status === 'failed' ? 'Сервер временно недоступен.' : null,
+      has_lyrics: false,
       delivery_state: options.locked ? 'locked' : ready ? 'delivered' : 'pending',
       preparation_state: ready ? 'ready' : 'pending',
       artifacts: options.locked
@@ -141,6 +142,7 @@ async function mockApi(page: Page, options: MockOptions = {}) {
       }] })
     }
     if (/^\/api\/v1\/me\/projects\/[0-9a-f-]+$/.test(pathname)) return json({ project })
+    if (pathname.endsWith('/lyrics')) return json({ created: true }, 202)
     if (pathname === '/api/v1/me/billing/plans') {
       return json({
         enabled: options.billingEnabled ?? true,
@@ -369,6 +371,38 @@ test('horizontal video uses its own server contract on mobile', async ({ page })
   expect(request.postDataJSON()).toEqual({ aspect_ratio: 'horizontal' })
   expect(request.headers()['idempotency-key']).toBe('web-video-horizontal-version-1')
   await expectNoOverflow(page)
+})
+
+test('PiCogen lyrics offers one compact automatic or manual version on mobile', async ({ page }) => {
+  await mockApi(page)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto(`/tracks/${READY_PROJECT_ID}`)
+  await expect(page.getByRole('heading', { name: 'Добавить слова к нотам' })).toBeVisible()
+  await expect(page.getByText(/Один вариант для этого результата — бесплатно/)).toBeVisible()
+  await expect(page.getByLabel('Текст песни')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Вставить свой текст' }).click()
+  await page.getByLabel('Текст песни').fill('I have become so numb, I cannot feel you there')
+  await expectNoOverflow(page)
+  const accessibility = await new AxeBuilder({ page })
+    .exclude('iframe')
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze()
+  expect(accessibility.violations).toEqual([])
+  await page.screenshot({ path: 'artifacts/ui/picogen-lyrics-mobile.png', fullPage: true })
+
+  const lyricsRequest = page.waitForRequest((request) => (
+    request.method() === 'POST' && request.url().endsWith('/versions/version-1/lyrics')
+  ))
+  const navigation = page.waitForNavigation()
+  await page.getByRole('button', { name: 'Создать версию со словами' }).click()
+  const request = await lyricsRequest
+  await navigation
+
+  expect(request.postDataJSON()).toEqual({
+    mode: 'manual',
+    text: 'I have become so numb, I cannot feel you there',
+  })
+  expect(request.headers()['idempotency-key']).toBe('web-lyrics-version-1')
 })
 
 test('locked project explains that regeneration is unnecessary', async ({ page }) => {

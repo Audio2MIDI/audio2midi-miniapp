@@ -220,6 +220,7 @@ export async function sendProjectFeedback(projectId: string, input: {
 }
 
 export type VideoAspectRatio = 'vertical' | 'horizontal'
+export type LyricsMode = 'automatic' | 'manual'
 
 export async function renderProjectVideo(
   projectId: string,
@@ -233,6 +234,19 @@ export async function renderProjectVideo(
     `/v1/me/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/video`,
     { aspect_ratio: aspectRatio },
     { headers: { 'Idempotency-Key': idempotencyKey } },
+  )
+}
+
+export async function renderProjectLyrics(
+  projectId: string,
+  versionId: string,
+  mode: LyricsMode,
+  text?: string,
+): Promise<void> {
+  await post(
+    `/v1/me/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/lyrics`,
+    { mode, ...(text ? { text } : {}) },
+    { headers: { 'Idempotency-Key': `web-lyrics-${versionId}` } },
   )
 }
 

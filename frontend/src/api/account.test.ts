@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { renderProjectVideo } from './account'
+import { renderProjectLyrics, renderProjectVideo } from './account'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -29,4 +29,22 @@ describe('project video API', () => {
       )
     },
   )
+})
+
+describe('project lyrics API', () => {
+  it('sends only the selected typed mode and manual text', async () => {
+    vi.stubGlobal('window', { location: { origin: 'https://app.audio2midi.ru' } })
+    const fetch = vi.fn().mockResolvedValue(new Response('{}', {
+      status: 202,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+    vi.stubGlobal('fetch', fetch)
+
+    await renderProjectLyrics('project id', 'version id', 'manual', 'Мой текст песни')
+
+    const [url, init] = fetch.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/v1/me/projects/project%20id/versions/version%20id/lyrics')
+    expect(JSON.parse(String(init.body))).toEqual({ mode: 'manual', text: 'Мой текст песни' })
+    expect(new Headers(init.headers).get('Idempotency-Key')).toBe('web-lyrics-version id')
+  })
 })
