@@ -5,10 +5,11 @@ import {
   createBrowserHandoff,
   getEditorCapabilities,
   getProject,
+  renderProjectLyrics,
   renderProjectVideo,
   sendProjectFeedback,
 } from '../api/account'
-import type { VideoAspectRatio } from '../api/account'
+import type { LyricsMode, VideoAspectRatio } from '../api/account'
 import { ApiError } from '../api/client'
 import {
   downloadIntentUrl,
@@ -53,6 +54,9 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
   const [editorEnabled, setEditorEnabled] = useState(false)
   const [error, setError] = useState('')
   const [videoBusy, setVideoBusy] = useState<VideoAspectRatio | null>(null)
+  const [lyricsMode, setLyricsMode] = useState<LyricsMode>('automatic')
+  const [lyricsText, setLyricsText] = useState('')
+  const [lyricsBusy, setLyricsBusy] = useState(false)
   const [browserBusy, setBrowserBusy] = useState(false)
   const [feedbackRating, setFeedbackRating] = useState(0)
   const [feedbackComment, setFeedbackComment] = useState('')
@@ -113,6 +117,14 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
   const midi = artifact(artifacts, 'midi') ?? artifact(artifacts, 'score_midi') ?? artifact(artifacts, 'source_midi')
   const playable = artifacts.filter((item) => ['mp3', 'wav', 'full_audio', 'preview_mp3', 'vocals', 'accompaniment'].includes(item.role))
   const locked = latest?.delivery_state === 'locked'
+  const lyricsVersionExists = Boolean(project?.versions.some((version) => version.has_lyrics))
+  const lyricsSource = project?.versions.find((version) => (
+    version.engine === 'picogen'
+    && !version.has_lyrics
+    && version.status === 'succeeded'
+    && version.preparation_state === 'ready'
+    && ['unlocked', 'delivering', 'delivered'].includes(version.delivery_state ?? '')
+  ))
 
   async function makeVideo(aspectRatio: VideoAspectRatio) {
     if (!latest || videoBusy) return
@@ -126,6 +138,31 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
         ? 'Сначала откройте полный результат.'
         : 'Не удалось запустить создание видео.')
       setVideoBusy(null)
+    }
+  }
+
+  async function makeLyrics() {
+    if (!lyricsSource || lyricsBusy) return
+    const text = lyricsText.trim()
+    if (lyricsMode === 'manual' && text.length < 10) {
+      setError('Вставьте хотя бы 10 символов текста песни.')
+      return
+    }
+    setLyricsBusy(true)
+    setError('')
+    try {
+      await renderProjectLyrics(
+        projectId,
+        lyricsSource.version_id,
+        lyricsMode,
+        lyricsMode === 'manual' ? text : undefined,
+      )
+      window.location.reload()
+    } catch (lyricsError) {
+      setError(lyricsError instanceof ApiError && lyricsError.status === 409
+        ? 'Бесплатная версия со словами уже создана или находится в очереди.'
+        : 'Не удалось запустить версию со словами. Попробуйте ещё раз.')
+      setLyricsBusy(false)
     }
   }
 
@@ -298,6 +335,33 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
                 </div>
                 <a className="secondary-action" href="/new">Обработать другую композицию</a>
               </div>
+              {lyricsSource && !lyricsVersionExists && (
+                <div className="lyrics-tool">
+                  <div className="lyrics-tool__copy">
+                    <span aria-hidden="true">Aa</span>
+                    <div>
+                      <h3>Добавить слова к нотам</h3>
+                      <p>Создадим отдельную версию партитуры. Один вариант для этого результата — бесплатно.</p>
+                    </div>
+                  </div>
+                  <div aria-label="Источник текста" className="lyrics-mode" role="group">
+                    <button aria-pressed={lyricsMode === 'automatic'} onClick={() => setLyricsMode('automatic')} type="button">Распознать автоматически</button>
+                    <button aria-pressed={lyricsMode === 'manual'} onClick={() => setLyricsMode('manual')} type="button">Вставить свой текст</button>
+                  </div>
+                  {lyricsMode === 'manual' && (
+                    <textarea
+                      aria-label="Текст песни"
+                      maxLength={4000}
+                      onChange={(event) => setLyricsText(event.target.value)}
+                      placeholder="Вставьте текст песни…"
+                      value={lyricsText}
+                    />
+                  )}
+                  <button className="primary-action lyrics-tool__submit" disabled={lyricsBusy} onClick={() => void makeLyrics()} type="button">
+                    {lyricsBusy ? 'Запускаем…' : 'Создать версию со словами'}
+                  </button>
+                </div>
+              )}
               {error && <p className="studio-error" role="alert">{error}</p>}
             </section>
 

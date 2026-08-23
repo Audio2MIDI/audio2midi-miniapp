@@ -290,6 +290,7 @@ export interface ProjectVersion {
   started_at: string | null;
   finished_at: string | null;
   sanitized_error: string | null;
+  has_lyrics: boolean;
   delivery_state: string | null;
   preparation_state: string | null;
   artifacts: LibraryArtifact[];
