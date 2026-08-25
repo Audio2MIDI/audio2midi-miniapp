@@ -2135,7 +2135,16 @@
   }
 
   .result-card__open {
-    display: none;
+    display: inline-flex;
+    grid-column: 2 / -1;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    margin-top: 2px;
+    border: 1px solid rgba(147, 197, 253, 0.24);
+    border-radius: 8px;
+    color: var(--product-blue-soft);
+    background: rgba(29, 78, 216, 0.08);
   }
 
   .result-menu {
