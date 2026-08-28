@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  annotationInviteFromQuery,
   parseTelegramStartParam,
   openResultItemId,
   paymentReturnIntent,
@@ -91,6 +92,19 @@ describe('Telegram start parameters', () => {
       returnPath: null,
       annotationInviteCode: null,
     })
+  })
+})
+
+describe('staging annotation invitation query', () => {
+  it('is disabled in ordinary builds', () => {
+    expect(annotationInviteFromQuery(`?invite=${'a'.repeat(24)}`, false)).toBeNull()
+  })
+
+  it('accepts only a valid code when explicitly enabled', () => {
+    expect(annotationInviteFromQuery(`?invite=${'a'.repeat(24)}`, true)).toBe(
+      'a'.repeat(24),
+    )
+    expect(annotationInviteFromQuery('?invite=short', true)).toBeNull()
   })
 })
 

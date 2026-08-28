@@ -89,6 +89,15 @@ export function parseTelegramStartParam(
   return { midiParam: startParam, returnPath: null, annotationInviteCode: null }
 }
 
+export function annotationInviteFromQuery(
+  search: string,
+  enabled: boolean,
+): string | null {
+  if (!enabled) return null
+  const code = new URLSearchParams(search).get('invite')
+  return code && /^[a-zA-Z0-9_-]{24,128}$/.test(code) ? code : null
+}
+
 export function telegramLoginUrl(returnPath: string | null): string {
   const startParam = telegramStartParamForReturnPath(returnPath)
   return `https://t.me/Audio2MIDIBot?startapp=${encodeURIComponent(startParam)}`
