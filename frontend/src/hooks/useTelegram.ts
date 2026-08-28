@@ -22,6 +22,7 @@ interface UseTelegramResult {
   midiParam: string | null  // MIDI ID from start_param or URL
   fileUrl: string | null    // Direct MIDI file URL (e.g. S3)
   returnPath: string | null
+  annotationInviteCode: string | null
 }
 
 interface TelegramWebApp {
@@ -68,6 +69,7 @@ function getInitialTelegramState(): TelegramState {
       midiParam,
       fileUrl,
       returnPath: startRoute.returnPath,
+      annotationInviteCode: startRoute.annotationInviteCode,
     }
   }
 
@@ -84,6 +86,7 @@ function getInitialTelegramState(): TelegramState {
       midiParam,
       fileUrl,
       returnPath: startRoute.returnPath,
+      annotationInviteCode: startRoute.annotationInviteCode,
     }
   }
 
@@ -100,6 +103,7 @@ function getInitialTelegramState(): TelegramState {
     midiParam,
     fileUrl,
     returnPath: startRoute.returnPath,
+    annotationInviteCode: startRoute.annotationInviteCode,
   }
 }
 

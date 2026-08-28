@@ -125,6 +125,22 @@ export async function post<T>(
   return handleResponse<T>(response);
 }
 
+/** PUT request with a JSON body. */
+export async function put<T>(
+  path: string,
+  body: Record<string, unknown>,
+): Promise<T> {
+  const headers = buildHeaders({ 'Content-Type': 'application/json' });
+  const response = await fetchWithNetworkError(`${BASE_URL}${path}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(body),
+    credentials: 'include',
+  });
+  if (response.status === 204) return undefined as T;
+  return handleResponse<T>(response);
+}
+
 /** PATCH request with a JSON body. */
 export async function patch<T>(
   path: string,

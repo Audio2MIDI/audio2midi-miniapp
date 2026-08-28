@@ -51,6 +51,7 @@ describe('Telegram start parameters', () => {
     expect(parseTelegramStartParam('cabinet')).toEqual({
       midiParam: null,
       returnPath: null,
+      annotationInviteCode: null,
     })
   })
 
@@ -58,6 +59,7 @@ describe('Telegram start parameters', () => {
     expect(parseTelegramStartParam(`editor_${PROJECT_ID}`)).toEqual({
       midiParam: null,
       returnPath: `/editor/${PROJECT_ID}`,
+      annotationInviteCode: null,
     })
     expect(telegramLoginUrl(`/editor/${PROJECT_ID}`)).toBe(
       `https://t.me/Audio2MIDIBot?startapp=editor_${PROJECT_ID}`,
@@ -68,10 +70,26 @@ describe('Telegram start parameters', () => {
     expect(parseTelegramStartParam('midi_result-42')).toEqual({
       midiParam: 'result-42',
       returnPath: null,
+      annotationInviteCode: null,
     })
     expect(parseTelegramStartParam('legacy-result')).toEqual({
       midiParam: 'legacy-result',
       returnPath: null,
+      annotationInviteCode: null,
+    })
+  })
+
+  it('routes a private annotation invitation without treating it as MIDI', () => {
+    const code = 'abcdefghijklmnopqrstuvwx'
+    expect(parseTelegramStartParam(`annotate_${code}`)).toEqual({
+      midiParam: null,
+      returnPath: null,
+      annotationInviteCode: code,
+    })
+    expect(parseTelegramStartParam('annotate_too-short')).toEqual({
+      midiParam: null,
+      returnPath: null,
+      annotationInviteCode: null,
     })
   })
 })
