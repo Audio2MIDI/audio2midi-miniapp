@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   annotationInviteFromQuery,
+  pathWithoutAnnotationInvite,
   parseTelegramStartParam,
   openResultItemId,
   paymentReturnIntent,
@@ -105,6 +106,13 @@ describe('staging annotation invitation query', () => {
       'a'.repeat(24),
     )
     expect(annotationInviteFromQuery('?invite=short', true)).toBeNull()
+  })
+
+  it('removes a claimed annotation invite from the visible URL', () => {
+    expect(pathWithoutAnnotationInvite('https://staging.example/tasks?invite=secret&foo=1'))
+      .toBe('/tasks?foo=1')
+    expect(pathWithoutAnnotationInvite('https://staging.example/tasks?invite=secret#card'))
+      .toBe('/tasks#card')
   })
 })
 

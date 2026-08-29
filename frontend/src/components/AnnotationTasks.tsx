@@ -12,6 +12,7 @@ import {
   submitAnnotationAssignment,
   uploadAnnotationArtifact,
 } from '../api/annotation'
+import { pathWithoutAnnotationInvite } from '../routing'
 import type {
   AnnotationAssignment,
   AnnotationCampaign,
@@ -188,6 +189,9 @@ export default function AnnotationTasks({ initData, inviteCode, colorScheme }: P
           ? await claimAnnotationInvitation(inviteCode)
           : await getAnnotationMe()
         if (cancelled) return
+        if (inviteCode) {
+          window.history.replaceState({}, '', pathWithoutAnnotationInvite(window.location.href))
+        }
         setWorker(current)
         const firstId = await loadCampaigns()
         if (!cancelled) await loadNext(firstId)

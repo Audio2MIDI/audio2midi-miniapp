@@ -98,6 +98,13 @@ export function annotationInviteFromQuery(
   return code && /^[a-zA-Z0-9_-]{24,128}$/.test(code) ? code : null
 }
 
+export function pathWithoutAnnotationInvite(url: string): string {
+  const parsed = new URL(url)
+  parsed.searchParams.delete('invite')
+  const query = parsed.searchParams.toString()
+  return `${parsed.pathname}${query ? `?${query}` : ''}${parsed.hash}`
+}
+
 export function telegramLoginUrl(returnPath: string | null): string {
   const startParam = telegramStartParamForReturnPath(returnPath)
   return `https://t.me/Audio2MIDIBot?startapp=${encodeURIComponent(startParam)}`
