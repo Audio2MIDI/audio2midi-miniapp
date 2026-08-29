@@ -26,7 +26,7 @@ interface Props {
   colorScheme: 'light' | 'dark'
 }
 
-const DEFECTS = [
+const ARRANGEMENT_DEFECTS = [
   ['missing_melody', 'Потеряна мелодия'],
   ['wrong_harmony', 'Неверная гармония'],
   ['missing_bass', 'Потерян бас'],
@@ -38,6 +38,20 @@ const DEFECTS = [
   ['jumps', 'Неудобные скачки'],
   ['flat_velocity', 'Плоская динамика'],
   ['render_problem', 'Проблема рендера'],
+] as const
+
+const SOURCE_DEFECTS = [
+  ['wrong_song', 'Другая композиция'],
+  ['different_excerpt', 'Выбраны разные части песни'],
+  ['accompaniment_only', 'Только аккомпанемент'],
+  ['drums_present', 'Слышны барабаны'],
+  ['other_instrument_present', 'Слышен другой инструмент'],
+  ['voice_present', 'Слышен голос'],
+  ['transcription_noise', 'В MIDI появились лишние ноты'],
+  ['midi_timing_mismatch', 'MIDI расходится с целевым аудио'],
+  ['over_arranged', 'Кавер слишком сильно изменён'],
+  ['audio_noise', 'Шум или искажения записи'],
+  ['broken_audio', 'Обрыв или сломанный файл'],
 ] as const
 
 const SOURCE_QUESTIONS = [
@@ -347,6 +361,9 @@ export default function AnnotationTasks({ initData, inviteCode, colorScheme }: P
   }
 
   const assets = assignment?.assets ?? {}
+  const defectOptions = assignment?.task_kind === 'source_identity'
+    ? SOURCE_DEFECTS
+    : ARRANGEMENT_DEFECTS
   const completed = activeCampaign?.completed_items ?? progress?.completed ?? 0
   const total = activeCampaign?.assigned_items ?? 0
   const percent = total > 0 ? Math.round(completed / total * 100) : 0
@@ -453,7 +470,7 @@ export default function AnnotationTasks({ initData, inviteCode, colorScheme }: P
             <fieldset className="annotation-question">
               <legend>Что не так? Можно выбрать несколько причин</legend>
               <div className="annotation-tags">
-                {DEFECTS.map(([tag, label]) => (
+                {defectOptions.map(([tag, label]) => (
                   <label key={tag}>
                     <input
                       type="checkbox"

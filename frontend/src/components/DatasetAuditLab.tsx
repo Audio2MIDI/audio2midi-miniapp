@@ -67,12 +67,16 @@ const ARRANGEMENT_OPTIONS: Array<{
 ]
 
 const DEFECT_OPTIONS = [
-  ['foreign_instrument', 'Посторонний инструмент'],
+  ['drums_present', 'Слышны барабаны'],
+  ['other_instrument_present', 'Слышен другой инструмент'],
   ['vocal_leakage', 'Слышен голос'],
   ['wrong_song', 'Другая композиция'],
+  ['different_excerpt', 'Выбраны разные части песни'],
   ['incomplete_arrangement', 'Нет части мелодии или сопровождения'],
   ['transcription_noise', 'Лишние или случайные ноты'],
   ['timing_mismatch', 'MIDI заметно расходится по времени'],
+  ['over_arranged', 'Кавер слишком сильно изменён'],
+  ['audio_noise', 'Шум или искажения записи'],
   ['broken_audio', 'Обрыв или дефект звука'],
 ] as const
 
