@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   authenticateWithTelegram,
@@ -7,7 +7,8 @@ import {
   getProject,
   renderProjectLyrics,
   renderProjectVideo,
-  sendProjectFeedback,
+  sendProjectFeedbackOutcome,
+  updateProjectFeedbackComment,
 } from '../api/account'
 import type { LyricsMode, VideoAspectRatio } from '../api/account'
 import { ApiError } from '../api/client'
@@ -17,7 +18,12 @@ import {
   trackReadyProjectOpen,
   visualizerUrl,
 } from '../api/analytics'
-import type { LibraryArtifact, ProjectDetail } from '../api/types'
+import type {
+  LibraryArtifact,
+  ProjectDetail,
+  ResultFeedback,
+  ResultFeedbackOutcome,
+} from '../api/types'
 import { PageHeading, ProductHeader, ProductLoading, StatusBadge } from './ProductFrame'
 
 interface ProjectPageProps {
@@ -49,6 +55,15 @@ function artifact(artifacts: LibraryArtifact[], role: string) {
   return artifacts.find((item) => item.role === role)
 }
 
+type FeedbackTrigger = 'playback_15s' | 'download' | 'visualizer' | 'active_60s'
+
+const FEEDBACK_PROMPT_VERSION = 'result-quality-v2' as const
+const FEEDBACK_OUTCOMES: Array<{ outcome: ResultFeedbackOutcome; label: string }> = [
+  { outcome: 'usable', label: 'Да' },
+  { outcome: 'needs_edits', label: 'Частично' },
+  { outcome: 'unusable', label: 'Нет' },
+]
+
 export default function ProjectPage({ projectId, initData, colorScheme }: ProjectPageProps) {
   const [project, setProject] = useState<ProjectDetail | null>(null)
   const [editorEnabled, setEditorEnabled] = useState(false)
@@ -58,11 +73,22 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
   const [lyricsText, setLyricsText] = useState('')
   const [lyricsBusy, setLyricsBusy] = useState(false)
   const [browserBusy, setBrowserBusy] = useState(false)
-  const [feedbackRating, setFeedbackRating] = useState(0)
+  const [feedbackOutcome, setFeedbackOutcome] = useState<ResultFeedbackOutcome | null>(null)
   const [feedbackComment, setFeedbackComment] = useState('')
-  const [feedbackSent, setFeedbackSent] = useState(false)
+  const [feedbackRecord, setFeedbackRecord] = useState<ResultFeedback | null>(null)
+  const [legacyFeedbackSent, setLegacyFeedbackSent] = useState(false)
   const [feedbackVisible, setFeedbackVisible] = useState(false)
+  const [feedbackAcknowledged, setFeedbackAcknowledged] = useState(false)
+  const [feedbackBusy, setFeedbackBusy] = useState<'outcome' | 'comment' | null>(null)
+  const [feedbackMessage, setFeedbackMessage] = useState('')
+  const [feedbackTrigger, setFeedbackTrigger] = useState<FeedbackTrigger>('active_60s')
   const openedReadyProjects = useRef(new Set<string>())
+  const feedbackPromptTracked = useRef(false)
+  const playbackPositions = useRef(new Map<string, number>())
+  const playbackSeconds = useRef(0)
+  const visualizerFrame = useRef<HTMLIFrameElement>(null)
+  const visualizerReady = useRef(false)
+  const visualizerVisible = useRef(false)
 
   useEffect(() => {
     let cancelled = false
@@ -82,7 +108,13 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
         }
         if (cancelled) return
         setProject(response.project)
-        setFeedbackSent(response.project.feedback_submitted)
+        const currentVersionId = response.project.versions[0]?.version_id
+        const existingFeedback = currentVersionId
+          ? response.project.feedback_v2?.by_version[currentVersionId] ?? null
+          : null
+        setFeedbackRecord(existingFeedback)
+        setFeedbackOutcome(existingFeedback?.outcome ?? null)
+        setLegacyFeedbackSent(response.project.feedback_submitted)
         trackReadyProjectOpen(openedReadyProjects.current, projectId, response.project.status)
         const capabilities = await getEditorCapabilities().catch(() => null)
         if (!cancelled) setEditorEnabled(Boolean(capabilities?.enabled))
@@ -99,19 +131,6 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
     return () => { cancelled = true; if (timer) window.clearTimeout(timer) }
   }, [initData, projectId])
 
-  useEffect(() => {
-    if (project?.status !== 'ready' || project.feedback_submitted || feedbackSent) return
-    const dismissedUntil = Number(localStorage.getItem(`a2m_feedback_dismissed_until:${projectId}`) || 0)
-    if (dismissedUntil > Date.now()) return
-    const timer = window.setTimeout(() => {
-      setFeedbackVisible(true)
-      void trackProductEvent('feedback.prompt_shown', {
-        objectType: 'project', objectId: projectId, properties: { surface: 'project' },
-      })
-    }, 20_000)
-    return () => window.clearTimeout(timer)
-  }, [feedbackSent, project, projectId])
-
   const latest = project?.versions[0]
   const artifacts = useMemo(() => latest?.artifacts ?? [], [latest])
   const midi = artifact(artifacts, 'midi') ?? artifact(artifacts, 'score_midi') ?? artifact(artifacts, 'source_midi')
@@ -125,6 +144,58 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
     && version.preparation_state === 'ready'
     && ['unlocked', 'delivering', 'delivered'].includes(version.delivery_state ?? '')
   ))
+
+  const showFeedback = useCallback((trigger: FeedbackTrigger) => {
+    if (project?.status !== 'ready' || !latest || feedbackRecord || legacyFeedbackSent) return
+    const dismissedUntil = Number(localStorage.getItem(`a2m_feedback_dismissed_until:${projectId}`) || 0)
+    if (dismissedUntil > Date.now()) return
+    setFeedbackTrigger((current) => feedbackVisible ? current : trigger)
+    setFeedbackVisible(true)
+    if (!feedbackPromptTracked.current) {
+      feedbackPromptTracked.current = true
+      void trackProductEvent('feedback.prompt_shown', {
+        objectType: 'project', objectId: projectId, properties: { surface: 'project' },
+      })
+    }
+  }, [feedbackRecord, feedbackVisible, latest, legacyFeedbackSent, project?.status, projectId])
+
+  useEffect(() => {
+    if (project?.status !== 'ready' || feedbackRecord || legacyFeedbackSent || feedbackVisible) return
+    let activeMs = 0
+    let previousTick = performance.now()
+    const timer = window.setInterval(() => {
+      const now = performance.now()
+      if (document.visibilityState === 'visible') {
+        activeMs += now - previousTick
+      }
+      previousTick = now
+      if (activeMs >= 60_000) showFeedback('active_60s')
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [feedbackRecord, feedbackVisible, legacyFeedbackSent, project?.status, showFeedback])
+
+  useEffect(() => {
+    function onVisualizerReady(event: MessageEvent) {
+      if (event.origin !== window.location.origin) return
+      if (event.source !== visualizerFrame.current?.contentWindow) return
+      if ((event.data as { type?: unknown } | null)?.type !== 'audio2midi:visualizer-ready') return
+      visualizerReady.current = true
+      if (visualizerVisible.current) showFeedback('visualizer')
+    }
+    window.addEventListener('message', onVisualizerReady)
+    return () => window.removeEventListener('message', onVisualizerReady)
+  }, [showFeedback])
+
+  useEffect(() => {
+    const frame = visualizerFrame.current
+    if (!frame || typeof IntersectionObserver === 'undefined') return
+    const observer = new IntersectionObserver(([entry]) => {
+      visualizerVisible.current = entry.isIntersecting && entry.intersectionRatio >= 0.5
+      if (visualizerVisible.current && visualizerReady.current) showFeedback('visualizer')
+    }, { threshold: 0.5 })
+    observer.observe(frame)
+    return () => observer.disconnect()
+  }, [midi, showFeedback])
 
   async function makeVideo(aspectRatio: VideoAspectRatio) {
     if (!latest || videoBusy) return
@@ -185,21 +256,52 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
     }
   }
 
-  async function submitFeedback() {
-    if (!latest || feedbackRating < 1) return
-    setError('')
+  async function submitFeedbackOutcome(outcome: ResultFeedbackOutcome) {
+    if (!latest || feedbackBusy || feedbackRecord) return
+    setFeedbackOutcome(outcome)
+    setFeedbackMessage('')
+    setFeedbackBusy('outcome')
     try {
-      await sendProjectFeedback(projectId, {
-        project_version_id: latest.version_id,
-        rating: feedbackRating,
-        tags: [feedbackRating === 5 ? 'yes' : feedbackRating === 3 ? 'partly' : 'no'],
-        comment: feedbackComment,
+      const response = await sendProjectFeedbackOutcome(projectId, latest.version_id, {
+        outcome,
+        trigger: feedbackTrigger,
+        prompt_version: FEEDBACK_PROMPT_VERSION,
       })
-      setFeedbackSent(true)
-      setFeedbackVisible(false)
+      setFeedbackRecord(response.feedback)
+      setFeedbackOutcome(response.feedback.outcome)
+      if (response.feedback.outcome === 'usable') setFeedbackAcknowledged(true)
     } catch {
-      setError('Не удалось отправить отзыв. Попробуйте ещё раз.')
+      setFeedbackMessage('Не удалось сохранить ответ. Проверьте интернет и нажмите выбранный вариант ещё раз.')
+    } finally {
+      setFeedbackBusy(null)
     }
+  }
+
+  async function submitFeedbackComment() {
+    const comment = feedbackComment.trim()
+    if (!feedbackRecord || !comment || feedbackBusy) return
+    setFeedbackMessage('')
+    setFeedbackBusy('comment')
+    try {
+      const response = await updateProjectFeedbackComment(feedbackRecord.id, comment)
+      setFeedbackRecord(response.feedback)
+      setFeedbackComment(response.feedback.comment ?? comment)
+      setFeedbackAcknowledged(true)
+    } catch {
+      setFeedbackMessage('Не удалось сохранить комментарий. Текст останется здесь — попробуйте ещё раз.')
+    } finally {
+      setFeedbackBusy(null)
+    }
+  }
+
+  function trackAudioPlayback(artifactId: string, audio: HTMLAudioElement) {
+    const previousPosition = playbackPositions.current.get(artifactId)
+    playbackPositions.current.set(artifactId, audio.currentTime)
+    if (previousPosition === undefined) return
+    const delta = audio.currentTime - previousPosition
+    if (delta <= 0 || delta > 2) return
+    playbackSeconds.current += delta
+    if (playbackSeconds.current >= 15) showFeedback('playback_15s')
   }
 
   function dismissFeedback() {
@@ -211,6 +313,11 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
     void trackProductEvent('feedback.prompt_dismissed', {
       objectType: 'project', objectId: projectId, properties: { surface: 'project' },
     })
+  }
+
+  function skipFeedbackComment() {
+    setFeedbackVisible(false)
+    setFeedbackMessage('')
   }
 
   if (!project && !error) return <ProductLoading label="Открываем композицию…" />
@@ -265,7 +372,15 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
                     {playable.slice(0, 2).map((item) => (
                       <article className="audio-result" key={item.id}>
                         <strong>{ARTIFACT_LABELS[item.role] ?? item.role}</strong>
-                        <audio aria-label={ARTIFACT_LABELS[item.role] ?? item.role} controls preload="metadata" src={item.download_url} />
+                        <audio
+                          aria-label={ARTIFACT_LABELS[item.role] ?? item.role}
+                          controls
+                          onPlay={(event) => playbackPositions.current.set(item.id, event.currentTarget.currentTime)}
+                          onSeeking={(event) => playbackPositions.current.set(item.id, event.currentTarget.currentTime)}
+                          onTimeUpdate={(event) => trackAudioPlayback(item.id, event.currentTarget)}
+                          preload="metadata"
+                          src={item.download_url}
+                        />
                       </article>
                     ))}
                   </div>
@@ -303,6 +418,7 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
                 </div>
                 <iframe
                   loading="lazy"
+                  ref={visualizerFrame}
                   src={visualizerUrl(midi.download_url)}
                   title={`Piano roll — ${project.title}`}
                 />
@@ -313,7 +429,7 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
               <div className="section-heading"><h2>Скачать</h2><span>{artifacts.length} файлов</span></div>
               <div className="project-files">
                 {artifacts.filter((item) => item.role !== 'archive').map((item) => (
-                  <a href={downloadIntentUrl(item.download_url)} key={item.id}>
+                  <a href={downloadIntentUrl(item.download_url)} key={item.id} onClick={() => showFeedback('download')}>
                     <span aria-hidden="true">{item.role.includes('midi') ? '♪' : item.role.includes('pdf') ? '▤' : '▶'}</span>
                     <div><strong>{ARTIFACT_LABELS[item.role] ?? item.role}</strong><small>{item.size_bytes ? `${(item.size_bytes / 1024 / 1024).toFixed(1)} МБ` : 'Готово к скачиванию'}</small></div>
                     <em>↓</em>
@@ -365,24 +481,58 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
               {error && <p className="studio-error" role="alert">{error}</p>}
             </section>
 
-            {(feedbackVisible || feedbackSent) && <section className="project-section feedback-panel feedback-panel--inline">
-              <div className="section-heading"><h2>Получился результат, который вы хотели?</h2>{!feedbackSent && <button className="feedback-dismiss" aria-label="Скрыть вопрос" onClick={dismissFeedback} type="button">×</button>}</div>
-              {feedbackSent ? <p className="feedback-thanks">Спасибо — это поможет улучшить следующие результаты.</p> : (
+            {feedbackVisible && <section className="project-section feedback-panel feedback-panel--inline">
+              <div className="section-heading">
+                <h2>Результат пригодился?</h2>
+                {!feedbackRecord && (
+                  <button className="feedback-dismiss" aria-label="Скрыть вопрос" onClick={dismissFeedback} type="button">×</button>
+                )}
+              </div>
+              {feedbackAcknowledged ? (
+                <p className="feedback-thanks" role="status">Спасибо, ответ сохранён.</p>
+              ) : (
                 <>
-                  <div className="feedback-choices" aria-label="Оценка результата">
-                    {[{ rating: 5, label: 'Да' }, { rating: 3, label: 'Частично' }, { rating: 1, label: 'Нет' }].map(({ rating, label }) => (
+                  <div className="feedback-choices" aria-label="Насколько пригодился результат" role="group">
+                    {FEEDBACK_OUTCOMES.map(({ outcome, label }) => (
                       <button
-                        aria-label={`${rating} из 5`}
-                        aria-pressed={feedbackRating === rating}
-                        className={feedbackRating === rating ? 'feedback-choice feedback-choice--active' : 'feedback-choice'}
-                        key={rating}
-                        onClick={() => setFeedbackRating(rating)}
+                        aria-pressed={feedbackOutcome === outcome}
+                        className={feedbackOutcome === outcome ? 'feedback-choice feedback-choice--active' : 'feedback-choice'}
+                        disabled={Boolean(feedbackBusy) || Boolean(feedbackRecord)}
+                        key={outcome}
+                        onClick={() => void submitFeedbackOutcome(outcome)}
                         type="button"
                       >{label}</button>
                     ))}
                   </div>
-                  <textarea maxLength={4000} onChange={(event) => setFeedbackComment(event.target.value)} placeholder="Если хотите, напишите одной фразой, чего не хватило…" value={feedbackComment} />
-                  <button className="secondary-action" disabled={!feedbackRating} onClick={() => void submitFeedback()} type="button">Отправить отзыв</button>
+                  {(feedbackOutcome === 'needs_edits' || feedbackOutcome === 'unusable') && (
+                    <div className="feedback-comment">
+                      <label htmlFor="result-feedback-comment">Что именно стоит улучшить?</label>
+                      <textarea
+                        id="result-feedback-comment"
+                        maxLength={2000}
+                        onChange={(event) => setFeedbackComment(event.target.value)}
+                        placeholder="Напишите одной фразой, что получилось не так…"
+                        value={feedbackComment}
+                      />
+                      <div className="feedback-comment__actions">
+                        <button
+                          className="secondary-action"
+                          disabled={!feedbackRecord || !feedbackComment.trim() || Boolean(feedbackBusy)}
+                          onClick={() => void submitFeedbackComment()}
+                          type="button"
+                        >{feedbackBusy === 'comment' ? 'Сохраняем…' : 'Отправить комментарий'}</button>
+                        <button
+                          className="feedback-skip"
+                          disabled={!feedbackRecord || Boolean(feedbackBusy)}
+                          onClick={skipFeedbackComment}
+                          type="button"
+                        >Пропустить</button>
+                      </div>
+                    </div>
+                  )}
+                  <div aria-live="polite" className="feedback-status" role="status">
+                    {feedbackBusy === 'outcome' ? 'Сохраняем ответ…' : feedbackMessage}
+                  </div>
                 </>
               )}
             </section>}

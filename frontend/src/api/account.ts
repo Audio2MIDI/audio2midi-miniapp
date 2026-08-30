@@ -8,6 +8,8 @@ import type {
   BillingPlansResponse,
   CatalogTrack,
   ProjectSourceImport,
+  ResultFeedback,
+  ResultFeedbackOutcome,
   AccountNotification,
   EditorCapabilities,
   LibraryResponse,
@@ -228,6 +230,28 @@ export async function sendProjectFeedback(projectId: string, input: {
   await post(`/v1/me/projects/${encodeURIComponent(projectId)}/feedback`, input, {
     headers: { 'Idempotency-Key': crypto.randomUUID() },
   })
+}
+
+export async function sendProjectFeedbackOutcome(
+  projectId: string,
+  versionId: string,
+  input: {
+    outcome: ResultFeedbackOutcome
+    trigger: string
+    prompt_version: 'result-quality-v2'
+  },
+): Promise<{ created: boolean; feedback: ResultFeedback }> {
+  return post(
+    `/v1/me/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/feedback/outcome`,
+    input,
+  )
+}
+
+export async function updateProjectFeedbackComment(
+  feedbackId: string,
+  comment: string,
+): Promise<{ feedback: ResultFeedback }> {
+  return patch(`/v1/me/feedback/${encodeURIComponent(feedbackId)}/comment`, { comment })
 }
 
 export type VideoAspectRatio = 'vertical' | 'horizontal'

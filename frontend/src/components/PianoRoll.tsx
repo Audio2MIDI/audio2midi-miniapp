@@ -173,6 +173,9 @@ const PianoRoll: React.FC<PianoRollProps> = ({ midiParam, fileUrl, userId, initD
       stopPlayback()
       const trackingKey = fileUrl || midiParam || `local:${name}`
       trackSuccessfulVisualizerLoad(trackedMidiSourcesRef.current, trackingKey, fileUrl)
+      if (window.parent !== window) {
+        window.parent.postMessage({ type: 'audio2midi:visualizer-ready' }, window.location.origin)
+      }
     } catch (e) {
       console.error('Failed to parse MIDI:', e)
       alert('Не удалось прочитать MIDI файл')

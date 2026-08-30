@@ -5,6 +5,8 @@ import {
   createProjectUpload,
   renderProjectLyrics,
   renderProjectVideo,
+  sendProjectFeedbackOutcome,
+  updateProjectFeedbackComment,
   uploadProjectSource,
 } from './account'
 
@@ -52,6 +54,62 @@ describe('project lyrics API', () => {
     expect(url).toBe('/api/v1/me/projects/project%20id/versions/version%20id/lyrics')
     expect(JSON.parse(String(init.body))).toEqual({ mode: 'manual', text: 'Мой текст песни' })
     expect(new Headers(init.headers).get('Idempotency-Key')).toBe('web-lyrics-version id')
+  })
+})
+
+describe('result feedback API', () => {
+  const feedback = {
+    id: 'feedback id',
+    project_id: 'project id',
+    project_version_id: 'version id',
+    job_id: 'job id',
+    channel: 'web',
+    prompt_kind: 'result_quality',
+    outcome: 'needs_edits',
+    trigger: 'download',
+    prompt_version: 'result-quality-v2',
+    comment: null,
+    created_at: '2026-08-30T10:00:00Z',
+    updated_at: '2026-08-30T10:00:00Z',
+    commented_at: null,
+  }
+
+  it('saves an outcome on the exact project version', async () => {
+    vi.stubGlobal('window', { location: { origin: 'https://app.audio2midi.ru' } })
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ created: true, feedback }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+    vi.stubGlobal('fetch', fetch)
+
+    await sendProjectFeedbackOutcome('project id', 'version id', {
+      outcome: 'needs_edits',
+      trigger: 'download',
+      prompt_version: 'result-quality-v2',
+    })
+
+    const [url, init] = fetch.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/v1/me/projects/project%20id/versions/version%20id/feedback/outcome')
+    expect(JSON.parse(String(init.body))).toEqual({
+      outcome: 'needs_edits',
+      trigger: 'download',
+      prompt_version: 'result-quality-v2',
+    })
+  })
+
+  it('patches a comment without resending the outcome', async () => {
+    vi.stubGlobal('window', { location: { origin: 'https://app.audio2midi.ru' } })
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      feedback: { ...feedback, comment: 'Сбился ритм' },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetch)
+
+    await updateProjectFeedbackComment('feedback id', 'Сбился ритм')
+
+    const [url, init] = fetch.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/v1/me/feedback/feedback%20id/comment')
+    expect(init.method).toBe('PATCH')
+    expect(JSON.parse(String(init.body))).toEqual({ comment: 'Сбился ритм' })
   })
 })
 

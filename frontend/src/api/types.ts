@@ -301,6 +301,29 @@ export interface ProjectVersion {
   artifacts: LibraryArtifact[];
 }
 
+export type ResultFeedbackOutcome = 'usable' | 'needs_edits' | 'unusable';
+
+export interface ResultFeedback {
+  id: string;
+  project_id: string;
+  project_version_id: string;
+  job_id: string;
+  channel: string;
+  prompt_kind: string;
+  outcome: ResultFeedbackOutcome;
+  trigger: string;
+  prompt_version: string;
+  comment: string | null;
+  created_at: string;
+  updated_at: string;
+  commented_at: string | null;
+}
+
+export interface ResultFeedbackState {
+  latest: ResultFeedback | null;
+  by_version: Record<string, ResultFeedback>;
+}
+
 export interface ProjectDetail {
   id: string;
   title: string;
@@ -310,6 +333,7 @@ export interface ProjectDetail {
   source_mime_type: string | null;
   created_at: string;
   feedback_submitted: boolean;
+  feedback_v2?: ResultFeedbackState;
   versions: ProjectVersion[];
 }
 

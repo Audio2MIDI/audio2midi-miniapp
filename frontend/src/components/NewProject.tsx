@@ -398,7 +398,7 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
             {sourceMode === 'link' && (
               <div className="source-link-box">
                 <input value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} placeholder="Ссылка на Яндекс Музыку, Spotify или YouTube" type="url" />
-                <small>Аудио загрузит сервер; ссылка останется источником композиции.</small>
+                <small>Яндекс Музыку загрузим напрямую. Для YouTube и Spotify попробуем найти тот же трек в доступной библиотеке.</small>
               </div>
             )}
 
