@@ -242,6 +242,11 @@ export interface ProjectUploadResponse {
   expires_seconds: number;
 }
 
+export interface ProjectUploadCompleteResponse {
+  project_id: string;
+  source_uploaded_at: string;
+}
+
 export interface ProjectSubmitResponse {
   created: boolean;
   project_id: string;

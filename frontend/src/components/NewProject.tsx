@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   authenticateWithTelegram,
+  completeProjectUpload,
   createPianoProcessingRequest,
   createProjectImport,
   createProjectUpload,
@@ -26,7 +27,9 @@ import {
   writeProjectDraft,
   type NewProjectStep,
   type SourceMode,
+  type UploadAttemptDraft,
 } from '../newProjectState'
+import { retryUpload } from '../uploadRetry'
 import EmailAuthForm from './EmailAuthForm'
 import { PageHeading, ProductHeader, ProductLoading } from './ProductFrame'
 
@@ -104,6 +107,9 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
   const [error, setError] = useState('')
   const [dragging, setDragging] = useState(false)
   const [authNonce, setAuthNonce] = useState(0)
+  const [uploadAttempt, setUploadAttempt] = useState<UploadAttemptDraft | null>(
+    savedDraft?.uploadAttempt ?? null,
+  )
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -141,8 +147,10 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
   }, [])
 
   useEffect(() => {
-    writeProjectDraft(window.sessionStorage, { sourceMode, sourceUrl, title, engine, selectedTrack })
-  }, [engine, selectedTrack, sourceMode, sourceUrl, title])
+    writeProjectDraft(window.sessionStorage, {
+      sourceMode, sourceUrl, title, engine, selectedTrack, uploadAttempt,
+    })
+  }, [engine, selectedTrack, sourceMode, sourceUrl, title, uploadAttempt])
 
   const effectiveTitle = useMemo(
     () => title.trim() || (selectedTrack ? `${selectedTrack.artist} — ${selectedTrack.title}` : '') || file?.name.replace(/\.[^.]+$/, '') || 'Моя композиция',
@@ -178,6 +186,10 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
       return
     }
     setFile(nextFile)
+    if (uploadAttempt
+      && (uploadAttempt.filename !== nextFile.name || uploadAttempt.sizeBytes !== nextFile.size)) {
+      setUploadAttempt(null)
+    }
     if (!title) setTitle(nextFile.name.replace(/\.[^.]+$/, ''))
   }
 
@@ -217,16 +229,40 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
       if (sourceMode === 'file' && file) {
         setProgress('Проверяем файл…')
         const digest = await sha256(file)
-        setProgress('Загружаем аудио…')
-        const upload = await createProjectUpload({
+        const mimeType = mimeForFile(file)
+        const attempt = uploadAttempt
+          && uploadAttempt.filename === file.name
+          && uploadAttempt.sizeBytes === file.size
+          && uploadAttempt.sha256 === digest
+          && uploadAttempt.mimeType === mimeType
+          ? uploadAttempt
+          : {
+              idempotencyKey: crypto.randomUUID(),
+              filename: file.name,
+              sizeBytes: file.size,
+              sha256: digest,
+              mimeType,
+            }
+        setUploadAttempt(attempt)
+        writeProjectDraft(window.sessionStorage, {
+          sourceMode, sourceUrl, title, engine, selectedTrack, uploadAttempt: attempt,
+        })
+        const uploadInput = {
           title: effectiveTitle,
           filename: file.name,
           sha256: digest,
           size_bytes: file.size,
-          mime_type: mimeForFile(file),
+          mime_type: mimeType,
+        }
+        projectId = await retryUpload(async (retry) => {
+          setProgress(retry === 0 ? 'Загружаем аудио…' : 'Повторяем загрузку…')
+          const upload = await createProjectUpload(uploadInput, attempt.idempotencyKey)
+          await uploadProjectSource(upload.upload_url, file, upload.required_headers)
+          await completeProjectUpload(upload.project.id)
+          return upload.project.id
+        }, {
+          onRetry: () => setProgress('Связь прервалась. Повторяем загрузку…'),
         })
-        await uploadProjectSource(upload.upload_url, file, upload.required_headers)
-        projectId = upload.project.id
       } else {
         setProgress('Готовим источник…')
         const sourceValue = sourceMode === 'catalog' ? selectedTrack!.source_id : sourceUrl.trim()
