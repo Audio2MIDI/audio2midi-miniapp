@@ -1,4 +1,4 @@
-import { del, fetchWithNetworkError, get, patch, post } from './client'
+import { ApiError, del, fetchWithNetworkError, get, patch, post } from './client'
 import type {
   AccountResponse,
   AuthenticationResponse,
@@ -17,6 +17,7 @@ import type {
   ProfileResponse,
   ProjectDetailResponse,
   ProjectSubmitResponse,
+  ProjectUploadCompleteResponse,
   ProjectUploadResponse,
   SessionsResponse,
   PaymentProvider,
@@ -143,8 +144,10 @@ export async function createProjectUpload(input: {
   sha256: string
   size_bytes: number
   mime_type: string
-}): Promise<ProjectUploadResponse> {
-  return post<ProjectUploadResponse>('/v1/me/projects/presign', input)
+}, idempotencyKey?: string): Promise<ProjectUploadResponse> {
+  return post<ProjectUploadResponse>('/v1/me/projects/presign', input, {
+    headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+  })
 }
 
 export async function uploadProjectSource(
@@ -160,8 +163,16 @@ export async function uploadProjectSource(
     credentials: uploadOrigin === window.location.origin ? 'include' : 'omit',
   })
   if (!response.ok) {
-    throw new Error(`Не удалось загрузить файл: HTTP ${response.status}`)
+    throw new ApiError(`Не удалось загрузить файл: HTTP ${response.status}`, response.status)
   }
+}
+
+export async function completeProjectUpload(
+  projectId: string,
+): Promise<ProjectUploadCompleteResponse> {
+  return post<ProjectUploadCompleteResponse>(
+    `/v1/me/projects/${encodeURIComponent(projectId)}/upload-complete`,
+  )
 }
 
 export async function submitProject(

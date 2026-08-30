@@ -44,6 +44,13 @@ describe('new project draft', () => {
       title: 'Song',
       engine: 'sheetsage',
       selectedTrack: null,
+      uploadAttempt: {
+        idempotencyKey: 'upload-1',
+        filename: 'song.mp3',
+        sizeBytes: 123,
+        sha256: 'a'.repeat(64),
+        mimeType: 'audio/mpeg',
+      },
     })
     expect(readProjectDraft(storage)).toEqual({
       sourceMode: 'link',
@@ -51,6 +58,13 @@ describe('new project draft', () => {
       title: 'Song',
       engine: 'sheetsage',
       selectedTrack: null,
+      uploadAttempt: {
+        idempotencyKey: 'upload-1',
+        filename: 'song.mp3',
+        sizeBytes: 123,
+        sha256: 'a'.repeat(64),
+        mimeType: 'audio/mpeg',
+      },
     })
   })
 

@@ -36,6 +36,15 @@ export interface PersistedProjectDraft {
     artwork_url: string | null
     source_kind: 'catalog_track'
   } | null
+  uploadAttempt: UploadAttemptDraft | null
+}
+
+export interface UploadAttemptDraft {
+  idempotencyKey: string
+  filename: string
+  sizeBytes: number
+  sha256: string
+  mimeType: string
 }
 
 export function readProjectDraft(storage: Storage | undefined): PersistedProjectDraft | null {
@@ -62,6 +71,28 @@ export function readProjectDraft(storage: Storage | undefined): PersistedProject
               ? String(parsed.selectedTrack.artwork_url)
               : null,
             source_kind: 'catalog_track',
+          }
+        : null,
+      uploadAttempt: parsed.uploadAttempt
+        && typeof parsed.uploadAttempt === 'object'
+        && typeof parsed.uploadAttempt.idempotencyKey === 'string'
+        && parsed.uploadAttempt.idempotencyKey.length >= 1
+        && parsed.uploadAttempt.idempotencyKey.length <= 255
+        && typeof parsed.uploadAttempt.filename === 'string'
+        && parsed.uploadAttempt.filename.length >= 1
+        && typeof parsed.uploadAttempt.sizeBytes === 'number'
+        && Number.isSafeInteger(parsed.uploadAttempt.sizeBytes)
+        && parsed.uploadAttempt.sizeBytes >= 1
+        && typeof parsed.uploadAttempt.sha256 === 'string'
+        && /^[a-f0-9]{64}$/i.test(parsed.uploadAttempt.sha256)
+        && typeof parsed.uploadAttempt.mimeType === 'string'
+        && parsed.uploadAttempt.mimeType.length >= 1
+        ? {
+            idempotencyKey: parsed.uploadAttempt.idempotencyKey.slice(0, 255),
+            filename: parsed.uploadAttempt.filename.slice(0, 255),
+            sizeBytes: parsed.uploadAttempt.sizeBytes,
+            sha256: parsed.uploadAttempt.sha256,
+            mimeType: parsed.uploadAttempt.mimeType.slice(0, 255),
           }
         : null,
     }
