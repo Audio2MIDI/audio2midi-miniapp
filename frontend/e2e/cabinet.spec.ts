@@ -46,9 +46,24 @@ const populatedLibrary = [
   },
 ]
 
-function projectFixture(options: { status?: 'ready' | 'queued' | 'processing' | 'failed'; locked?: boolean } = {}) {
+function resultFeedbackFixture(comment: string | null = null) {
+  return {
+    id: 'feedback-1', project_id: READY_PROJECT_ID, project_version_id: 'version-1', job_id: 'job-ready',
+    channel: 'web', prompt_kind: 'result_quality', outcome: 'needs_edits' as const, trigger: 'download',
+    prompt_version: 'result-quality-v2', comment, created_at: '2026-08-30T10:00:00Z',
+    updated_at: '2026-08-30T10:00:00Z', commented_at: comment ? '2026-08-30T10:00:00Z' : null,
+  }
+}
+
+function projectFixture(options: {
+  status?: 'ready' | 'queued' | 'processing' | 'failed'
+  locked?: boolean
+  feedbackV2Enabled?: boolean
+  feedback?: ReturnType<typeof resultFeedbackFixture>
+} = {}) {
   const status = options.status ?? 'ready'
   const ready = status === 'ready'
+  const feedback = options.feedback ?? null
   return {
     id: ready ? READY_PROJECT_ID : QUEUED_PROJECT_ID,
     title: ready ? 'Linkin Park — Numb' : 'Shape of You',
@@ -57,6 +72,12 @@ function projectFixture(options: { status?: 'ready' | 'queued' | 'processing' | 
     source_size_bytes: 7340032,
     source_mime_type: 'audio/mpeg',
     created_at: '2026-08-02T18:20:00Z',
+    feedback_submitted: false,
+    feedback_v2: {
+      enabled: options.feedbackV2Enabled ?? true,
+      latest: feedback,
+      by_version: feedback ? { 'version-1': feedback } : {},
+    },
     versions: [{
       version_id: ready ? 'version-1' : 'version-queued',
       version_kind: 'generated',
@@ -95,12 +116,14 @@ interface MockOptions {
   editorEnabled?: boolean
   billingEnabled?: boolean
   recurring?: boolean
+  feedbackCommentFailures?: number
 }
 
 async function mockApi(page: Page, options: MockOptions = {}) {
   const account = { ...baseAccount, ...(options.account ?? {}) }
   const library = options.library ?? populatedLibrary
   const project = options.project ?? projectFixture()
+  let feedbackCommentFailures = options.feedbackCommentFailures ?? 0
 
   await page.route('**/fixtures/**', async (route) => {
     const url = route.request().url()
@@ -180,6 +203,28 @@ async function mockApi(page: Page, options: MockOptions = {}) {
         source_id: 'catalog-1', title: 'Numb', artist: 'Linkin Park', duration_ms: 185000,
         artwork_url: null, source_kind: 'catalog_track',
       }] })
+    }
+    if (pathname.endsWith('/feedback/outcome')) {
+      const body = route.request().postDataJSON() as { outcome: string; trigger: string; prompt_version: string }
+      return json({ created: true, feedback: {
+        id: 'feedback-1', project_id: READY_PROJECT_ID, project_version_id: 'version-1', job_id: 'job-ready',
+        channel: 'web', prompt_kind: 'result_quality', outcome: body.outcome, trigger: body.trigger,
+        prompt_version: body.prompt_version, comment: null, created_at: '2026-08-30T10:00:00Z',
+        updated_at: '2026-08-30T10:00:00Z', commented_at: null,
+      } })
+    }
+    if (pathname === '/api/v1/me/feedback/feedback-1/comment') {
+      if (feedbackCommentFailures > 0) {
+        feedbackCommentFailures -= 1
+        return json({ detail: 'temporary' }, 503)
+      }
+      const body = route.request().postDataJSON() as { comment: string }
+      return json({ feedback: {
+        id: 'feedback-1', project_id: READY_PROJECT_ID, project_version_id: 'version-1', job_id: 'job-ready',
+        channel: 'web', prompt_kind: 'result_quality', outcome: 'needs_edits', trigger: 'download',
+        prompt_version: 'result-quality-v2', comment: body.comment, created_at: '2026-08-30T10:00:00Z',
+        updated_at: '2026-08-30T10:01:00Z', commented_at: '2026-08-30T10:01:00Z',
+      } })
     }
     if (pathname.endsWith('/feedback')) return route.fulfill({ status: 204, body: '' })
     return json({ items: [] })
@@ -296,6 +341,7 @@ test('link draft survives refresh while a file must be selected again', async ({
   await mockApi(page)
   await page.goto('/new?step=source')
   await page.getByRole('tab', { name: 'Ссылка' }).click()
+  await expect(page.getByText('Яндекс Музыку загрузим напрямую. Для YouTube и Spotify попробуем найти тот же трек в доступной библиотеке.')).toBeVisible()
   await page.getByPlaceholder('Ссылка на Яндекс Музыку, Spotify или YouTube').fill('https://music.example/track/42')
   await page.getByPlaceholder('Заполнится автоматически').fill('Ночной поезд')
   await page.getByRole('button', { name: 'Продолжить' }).click()
@@ -351,9 +397,127 @@ test('ready project prioritizes playback, visualization, editing and downloads',
   await expect(page.getByRole('link', { name: 'Открыть визуализацию' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Редактировать' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Скачать' })).toBeVisible()
-  await expect(page.getByRole('button', { name: '5 из 5' })).toBeVisible()
-  await expectNoA11yViolations(page)
+  const pdfDownload = page.getByRole('link', { name: /Партитура PDF/ })
+  await pdfDownload.evaluate((element) => element.addEventListener('click', (event) => event.preventDefault(), { once: true }))
+  await pdfDownload.click()
+  await expect(page.getByRole('heading', { name: 'Результат пригодился?' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Да', exact: true })).toBeVisible()
+  const accessibility = await new AxeBuilder({ page })
+    .exclude('iframe')
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze()
+  expect(accessibility.violations).toEqual([])
   await page.screenshot({ path: 'artifacts/ui/project-desktop.png', fullPage: true })
+})
+
+test('partial feedback saves immediately and preserves the comment after a network error', async ({ page }) => {
+  await mockApi(page, { feedbackCommentFailures: 1 })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto(`/tracks/${READY_PROJECT_ID}`)
+
+  const pdfDownload = page.getByRole('link', { name: /Партитура PDF/ })
+  await pdfDownload.evaluate((element) => element.addEventListener('click', (event) => event.preventDefault(), { once: true }))
+  await pdfDownload.click()
+
+  const outcomeRequest = page.waitForRequest((request) => request.url().endsWith('/feedback/outcome'))
+  await page.getByRole('button', { name: 'Частично' }).click()
+  expect((await outcomeRequest).postDataJSON()).toEqual({
+    outcome: 'needs_edits', trigger: 'download', prompt_version: 'result-quality-v2',
+  })
+
+  const comment = page.getByLabel('Что именно стоит улучшить?')
+  await comment.fill('В середине сбился ритм')
+  await page.getByRole('button', { name: 'Отправить комментарий' }).click()
+  await expect(page.getByText(/Текст останется здесь/)).toBeVisible()
+  await expect(comment).toHaveValue('В середине сбился ритм')
+  await expectNoOverflow(page)
+  const accessibility = await new AxeBuilder({ page })
+    .exclude('iframe')
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze()
+  expect(accessibility.violations).toEqual([])
+  await page.screenshot({ path: 'artifacts/ui/feedback-comment-error-mobile.png', fullPage: true })
+
+  await page.getByRole('button', { name: 'Отправить комментарий' }).click()
+  await expect(page.getByText('Спасибо, ответ сохранён.')).toBeVisible()
+})
+
+test('feedback rollout off keeps every v2 trigger hidden', async ({ page }) => {
+  await page.clock.install()
+  await mockApi(page, { project: projectFixture({ feedbackV2Enabled: false }) })
+  await page.goto(`/tracks/${READY_PROJECT_ID}`)
+  await expect(page.getByRole('heading', { name: 'Linkin Park — Numb' })).toBeVisible()
+
+  const pdfDownload = page.getByRole('link', { name: /Партитура PDF/ })
+  await pdfDownload.evaluate((element) => element.addEventListener('click', (event) => event.preventDefault(), { once: true }))
+  await pdfDownload.click()
+  await page.clock.fastForward(61_000)
+
+  await expect(page.getByRole('heading', { name: 'Результат пригодился?' })).toHaveCount(0)
+})
+
+test('saved negative outcome restores only its unfinished comment form', async ({ page }) => {
+  let outcomeRequests = 0
+  page.on('request', (request) => {
+    if (request.url().endsWith('/feedback/outcome')) outcomeRequests += 1
+  })
+  await mockApi(page, { project: projectFixture({ feedback: resultFeedbackFixture() }) })
+  await page.goto(`/tracks/${READY_PROJECT_ID}`)
+
+  await expect(page.getByRole('heading', { name: 'Результат пригодился?' })).toBeVisible()
+  const partial = page.getByRole('button', { name: 'Частично' })
+  await expect(partial).toHaveAttribute('aria-pressed', 'true')
+  await expect(partial).toBeDisabled()
+  await page.getByLabel('Что именно стоит улучшить?').fill('Аккорды в припеве не совпали')
+  await page.getByRole('button', { name: 'Отправить комментарий' }).click()
+
+  await expect(page.getByText('Спасибо, ответ сохранён.')).toBeVisible()
+  expect(outcomeRequests).toBe(0)
+})
+
+test('successful visualizer signal asks only after the embedded result is visible', async ({ page }) => {
+  await mockApi(page)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto(`/tracks/${READY_PROJECT_ID}`)
+  await expect(page.getByRole('heading', { name: 'Результат пригодился?' })).toHaveCount(0)
+
+  const iframe = page.locator('iframe[title^="Piano roll"]')
+  await iframe.scrollIntoViewIfNeeded()
+  const frame = page.frames().find((candidate) => candidate.url().includes('/visualizer'))
+  expect(frame).toBeTruthy()
+  await frame!.evaluate(() => {
+    window.parent.postMessage({ type: 'audio2midi:visualizer-ready' }, window.location.origin)
+  })
+
+  await expect(page.getByRole('heading', { name: 'Результат пригодился?' })).toBeVisible()
+})
+
+test('active result page uses the 60 second feedback fallback', async ({ page }) => {
+  await page.clock.install()
+  await mockApi(page)
+  await page.goto(`/tracks/${READY_PROJECT_ID}`)
+  await expect(page.getByRole('heading', { name: 'Linkin Park — Numb' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Результат пригодился?' })).toHaveCount(0)
+
+  await page.clock.fastForward(61_000)
+
+  await expect(page.getByRole('heading', { name: 'Результат пригодился?' })).toBeVisible()
+})
+
+test('15 seconds of playback opens feedback without a page timer', async ({ page }) => {
+  await mockApi(page)
+  await page.goto(`/tracks/${READY_PROJECT_ID}`)
+  await expect(page.getByRole('heading', { name: 'Linkin Park — Numb' })).toBeVisible()
+
+  await page.locator('audio').evaluate((audio) => {
+    audio.dispatchEvent(new Event('play', { bubbles: true }))
+    for (let second = 1; second <= 16; second += 1) {
+      Object.defineProperty(audio, 'currentTime', { configurable: true, value: second })
+      audio.dispatchEvent(new Event('timeupdate', { bubbles: true }))
+    }
+  })
+
+  await expect(page.getByRole('heading', { name: 'Результат пригодился?' })).toBeVisible()
 })
 
 test('horizontal video uses its own server contract on mobile', async ({ page }) => {
