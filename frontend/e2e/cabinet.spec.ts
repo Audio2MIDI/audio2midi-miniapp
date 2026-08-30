@@ -46,9 +46,24 @@ const populatedLibrary = [
   },
 ]
 
-function projectFixture(options: { status?: 'ready' | 'queued' | 'processing' | 'failed'; locked?: boolean } = {}) {
+function resultFeedbackFixture(comment: string | null = null) {
+  return {
+    id: 'feedback-1', project_id: READY_PROJECT_ID, project_version_id: 'version-1', job_id: 'job-ready',
+    channel: 'web', prompt_kind: 'result_quality', outcome: 'needs_edits' as const, trigger: 'download',
+    prompt_version: 'result-quality-v2', comment, created_at: '2026-08-30T10:00:00Z',
+    updated_at: '2026-08-30T10:00:00Z', commented_at: comment ? '2026-08-30T10:00:00Z' : null,
+  }
+}
+
+function projectFixture(options: {
+  status?: 'ready' | 'queued' | 'processing' | 'failed'
+  locked?: boolean
+  feedbackV2Enabled?: boolean
+  feedback?: ReturnType<typeof resultFeedbackFixture>
+} = {}) {
   const status = options.status ?? 'ready'
   const ready = status === 'ready'
+  const feedback = options.feedback ?? null
   return {
     id: ready ? READY_PROJECT_ID : QUEUED_PROJECT_ID,
     title: ready ? 'Linkin Park — Numb' : 'Shape of You',
@@ -58,7 +73,11 @@ function projectFixture(options: { status?: 'ready' | 'queued' | 'processing' | 
     source_mime_type: 'audio/mpeg',
     created_at: '2026-08-02T18:20:00Z',
     feedback_submitted: false,
-    feedback_v2: { latest: null, by_version: {} },
+    feedback_v2: {
+      enabled: options.feedbackV2Enabled ?? true,
+      latest: feedback,
+      by_version: feedback ? { 'version-1': feedback } : {},
+    },
     versions: [{
       version_id: ready ? 'version-1' : 'version-queued',
       version_kind: 'generated',
@@ -421,6 +440,39 @@ test('partial feedback saves immediately and preserves the comment after a netwo
 
   await page.getByRole('button', { name: 'Отправить комментарий' }).click()
   await expect(page.getByText('Спасибо, ответ сохранён.')).toBeVisible()
+})
+
+test('feedback rollout off keeps every v2 trigger hidden', async ({ page }) => {
+  await page.clock.install()
+  await mockApi(page, { project: projectFixture({ feedbackV2Enabled: false }) })
+  await page.goto(`/tracks/${READY_PROJECT_ID}`)
+  await expect(page.getByRole('heading', { name: 'Linkin Park — Numb' })).toBeVisible()
+
+  const pdfDownload = page.getByRole('link', { name: /Партитура PDF/ })
+  await pdfDownload.evaluate((element) => element.addEventListener('click', (event) => event.preventDefault(), { once: true }))
+  await pdfDownload.click()
+  await page.clock.fastForward(61_000)
+
+  await expect(page.getByRole('heading', { name: 'Результат пригодился?' })).toHaveCount(0)
+})
+
+test('saved negative outcome restores only its unfinished comment form', async ({ page }) => {
+  let outcomeRequests = 0
+  page.on('request', (request) => {
+    if (request.url().endsWith('/feedback/outcome')) outcomeRequests += 1
+  })
+  await mockApi(page, { project: projectFixture({ feedback: resultFeedbackFixture() }) })
+  await page.goto(`/tracks/${READY_PROJECT_ID}`)
+
+  await expect(page.getByRole('heading', { name: 'Результат пригодился?' })).toBeVisible()
+  const partial = page.getByRole('button', { name: 'Частично' })
+  await expect(partial).toHaveAttribute('aria-pressed', 'true')
+  await expect(partial).toBeDisabled()
+  await page.getByLabel('Что именно стоит улучшить?').fill('Аккорды в припеве не совпали')
+  await page.getByRole('button', { name: 'Отправить комментарий' }).click()
+
+  await expect(page.getByText('Спасибо, ответ сохранён.')).toBeVisible()
+  expect(outcomeRequests).toBe(0)
 })
 
 test('successful visualizer signal asks only after the embedded result is visible', async ({ page }) => {

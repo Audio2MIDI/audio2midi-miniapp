@@ -320,6 +320,7 @@ export interface ResultFeedback {
 }
 
 export interface ResultFeedbackState {
+  enabled: boolean;
   latest: ResultFeedback | null;
   by_version: Record<string, ResultFeedback>;
 }

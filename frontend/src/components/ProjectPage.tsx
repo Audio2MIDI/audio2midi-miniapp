@@ -76,6 +76,7 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
   const [feedbackOutcome, setFeedbackOutcome] = useState<ResultFeedbackOutcome | null>(null)
   const [feedbackComment, setFeedbackComment] = useState('')
   const [feedbackRecord, setFeedbackRecord] = useState<ResultFeedback | null>(null)
+  const [feedbackV2Enabled, setFeedbackV2Enabled] = useState(false)
   const [legacyFeedbackSent, setLegacyFeedbackSent] = useState(false)
   const [feedbackVisible, setFeedbackVisible] = useState(false)
   const [feedbackAcknowledged, setFeedbackAcknowledged] = useState(false)
@@ -109,11 +110,27 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
         if (cancelled) return
         setProject(response.project)
         const currentVersionId = response.project.versions[0]?.version_id
+        const feedbackEnabled = response.project.feedback_v2?.enabled === true
         const existingFeedback = currentVersionId
           ? response.project.feedback_v2?.by_version[currentVersionId] ?? null
           : null
+        setFeedbackV2Enabled(feedbackEnabled)
         setFeedbackRecord(existingFeedback)
         setFeedbackOutcome(existingFeedback?.outcome ?? null)
+        setFeedbackTrigger(
+          existingFeedback?.trigger === 'playback_15s'
+            || existingFeedback?.trigger === 'download'
+            || existingFeedback?.trigger === 'visualizer'
+            || existingFeedback?.trigger === 'active_60s'
+            ? existingFeedback.trigger
+            : 'active_60s',
+        )
+        setFeedbackVisible(Boolean(
+          feedbackEnabled
+          && existingFeedback
+          && !existingFeedback.comment
+          && (existingFeedback.outcome === 'needs_edits' || existingFeedback.outcome === 'unusable'),
+        ))
         setLegacyFeedbackSent(response.project.feedback_submitted)
         trackReadyProjectOpen(openedReadyProjects.current, projectId, response.project.status)
         const capabilities = await getEditorCapabilities().catch(() => null)
@@ -146,7 +163,7 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
   ))
 
   const showFeedback = useCallback((trigger: FeedbackTrigger) => {
-    if (project?.status !== 'ready' || !latest || feedbackRecord || legacyFeedbackSent) return
+    if (!feedbackV2Enabled || project?.status !== 'ready' || !latest || feedbackRecord || legacyFeedbackSent) return
     const dismissedUntil = Number(localStorage.getItem(`a2m_feedback_dismissed_until:${projectId}`) || 0)
     if (dismissedUntil > Date.now()) return
     setFeedbackTrigger((current) => feedbackVisible ? current : trigger)
@@ -157,10 +174,10 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
         objectType: 'project', objectId: projectId, properties: { surface: 'project' },
       })
     }
-  }, [feedbackRecord, feedbackVisible, latest, legacyFeedbackSent, project?.status, projectId])
+  }, [feedbackRecord, feedbackV2Enabled, feedbackVisible, latest, legacyFeedbackSent, project?.status, projectId])
 
   useEffect(() => {
-    if (project?.status !== 'ready' || feedbackRecord || legacyFeedbackSent || feedbackVisible) return
+    if (!feedbackV2Enabled || project?.status !== 'ready' || feedbackRecord || legacyFeedbackSent || feedbackVisible) return
     let activeMs = 0
     let previousTick = performance.now()
     const timer = window.setInterval(() => {
@@ -172,9 +189,10 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
       if (activeMs >= 60_000) showFeedback('active_60s')
     }, 1000)
     return () => window.clearInterval(timer)
-  }, [feedbackRecord, feedbackVisible, legacyFeedbackSent, project?.status, showFeedback])
+  }, [feedbackRecord, feedbackV2Enabled, feedbackVisible, legacyFeedbackSent, project?.status, showFeedback])
 
   useEffect(() => {
+    if (!feedbackV2Enabled) return
     function onVisualizerReady(event: MessageEvent) {
       if (event.origin !== window.location.origin) return
       if (event.source !== visualizerFrame.current?.contentWindow) return
@@ -184,9 +202,10 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
     }
     window.addEventListener('message', onVisualizerReady)
     return () => window.removeEventListener('message', onVisualizerReady)
-  }, [showFeedback])
+  }, [feedbackV2Enabled, showFeedback])
 
   useEffect(() => {
+    if (!feedbackV2Enabled) return
     const frame = visualizerFrame.current
     if (!frame || typeof IntersectionObserver === 'undefined') return
     const observer = new IntersectionObserver(([entry]) => {
@@ -195,7 +214,7 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
     }, { threshold: 0.5 })
     observer.observe(frame)
     return () => observer.disconnect()
-  }, [midi, showFeedback])
+  }, [feedbackV2Enabled, midi, showFeedback])
 
   async function makeVideo(aspectRatio: VideoAspectRatio) {
     if (!latest || videoBusy) return
