@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  annotationInviteFromQuery,
+  pathWithoutAnnotationInvite,
   parseTelegramStartParam,
   openResultItemId,
   paymentReturnIntent,
@@ -51,6 +53,7 @@ describe('Telegram start parameters', () => {
     expect(parseTelegramStartParam('cabinet')).toEqual({
       midiParam: null,
       returnPath: null,
+      annotationInviteCode: null,
     })
   })
 
@@ -58,6 +61,7 @@ describe('Telegram start parameters', () => {
     expect(parseTelegramStartParam(`editor_${PROJECT_ID}`)).toEqual({
       midiParam: null,
       returnPath: `/editor/${PROJECT_ID}`,
+      annotationInviteCode: null,
     })
     expect(telegramLoginUrl(`/editor/${PROJECT_ID}`)).toBe(
       `https://t.me/Audio2MIDIBot?startapp=editor_${PROJECT_ID}`,
@@ -68,11 +72,47 @@ describe('Telegram start parameters', () => {
     expect(parseTelegramStartParam('midi_result-42')).toEqual({
       midiParam: 'result-42',
       returnPath: null,
+      annotationInviteCode: null,
     })
     expect(parseTelegramStartParam('legacy-result')).toEqual({
       midiParam: 'legacy-result',
       returnPath: null,
+      annotationInviteCode: null,
     })
+  })
+
+  it('routes a private annotation invitation without treating it as MIDI', () => {
+    const code = 'abcdefghijklmnopqrstuvwx'
+    expect(parseTelegramStartParam(`annotate_${code}`)).toEqual({
+      midiParam: null,
+      returnPath: null,
+      annotationInviteCode: code,
+    })
+    expect(parseTelegramStartParam('annotate_too-short')).toEqual({
+      midiParam: null,
+      returnPath: null,
+      annotationInviteCode: null,
+    })
+  })
+})
+
+describe('staging annotation invitation query', () => {
+  it('is disabled in ordinary builds', () => {
+    expect(annotationInviteFromQuery(`?invite=${'a'.repeat(24)}`, false)).toBeNull()
+  })
+
+  it('accepts only a valid code when explicitly enabled', () => {
+    expect(annotationInviteFromQuery(`?invite=${'a'.repeat(24)}`, true)).toBe(
+      'a'.repeat(24),
+    )
+    expect(annotationInviteFromQuery('?invite=short', true)).toBeNull()
+  })
+
+  it('removes a claimed annotation invite from the visible URL', () => {
+    expect(pathWithoutAnnotationInvite('https://staging.example/tasks?invite=secret&foo=1'))
+      .toBe('/tasks?foo=1')
+    expect(pathWithoutAnnotationInvite('https://staging.example/tasks?invite=secret#card'))
+      .toBe('/tasks#card')
   })
 })
 
