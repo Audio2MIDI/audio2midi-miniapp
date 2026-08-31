@@ -13,6 +13,7 @@ import {
   uploadAnnotationArtifact,
 } from '../api/annotation'
 import { pathWithoutAnnotationInvite } from '../routing'
+import { isExpiredAnnotationAssignment } from '../annotationLease'
 import type {
   AnnotationAssignment,
   AnnotationCampaign,
@@ -153,6 +154,7 @@ export default function AnnotationTasks({ initData, inviteCode, colorScheme }: P
   const assignmentRef = useRef<AnnotationAssignment | null>(null)
   const draftRevisionRef = useRef(0)
   const lastSavedDraftRef = useRef('')
+  const recoveryRef = useRef(false)
 
   const activeCampaign = useMemo(
     () => campaigns.find((item) => item.id === campaignId) ?? null,
@@ -194,6 +196,23 @@ export default function AnnotationTasks({ initData, inviteCode, colorScheme }: P
     setStatus(next ? 'ready' : 'complete')
   }, [])
 
+  const recoverAssignment = useCallback(async () => {
+    if (recoveryRef.current) return
+    const id = assignmentRef.current?.campaign_id || campaignId
+    if (!id) return
+    recoveryRef.current = true
+    activeAudio.current?.pause()
+    try {
+      await loadNext(id)
+      setError('Карточка восстановлена после перерыва. Проверьте ответы и продолжайте.')
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Не удалось восстановить карточку')
+      setStatus('error')
+    } finally {
+      recoveryRef.current = false
+    }
+  }, [campaignId, loadNext])
+
   useEffect(() => {
     let cancelled = false
     async function start() {
@@ -219,13 +238,44 @@ export default function AnnotationTasks({ initData, inviteCode, colorScheme }: P
     return () => { cancelled = true }
   }, [initData, inviteCode, loadCampaigns, loadNext])
 
+  const activeAssignmentId = assignment?.id
+
   useEffect(() => {
-    if (!assignment || status !== 'ready') return
-    const timer = window.setInterval(() => {
-      void heartbeatAnnotationAssignment(assignment).catch(() => undefined)
-    }, 120_000)
-    return () => window.clearInterval(timer)
-  }, [assignment, status])
+    if (!activeAssignmentId || status !== 'ready') return
+    let timer: number | undefined
+
+    const heartbeat = async () => {
+      if (document.visibilityState !== 'visible') return
+      const active = assignmentRef.current
+      if (!active) return
+      try {
+        await heartbeatAnnotationAssignment(active)
+      } catch (reason) {
+        if (isExpiredAnnotationAssignment(reason)) await recoverAssignment()
+      }
+    }
+
+    const startHeartbeat = () => {
+      if (timer !== undefined) window.clearInterval(timer)
+      timer = undefined
+      if (document.visibilityState !== 'visible') return
+      void heartbeat()
+      timer = window.setInterval(() => { void heartbeat() }, 120_000)
+    }
+
+    const onVisibilityChange = () => startHeartbeat()
+    const onFocus = () => {
+      if (document.visibilityState === 'visible') void heartbeat()
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    window.addEventListener('focus', onFocus)
+    startHeartbeat()
+    return () => {
+      if (timer !== undefined) window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [activeAssignmentId, recoverAssignment, status])
 
   useEffect(() => {
     const current = assignmentRef.current
@@ -246,10 +296,12 @@ export default function AnnotationTasks({ initData, inviteCode, colorScheme }: P
           draft_revision: saved.draft_revision,
           draft: answer,
         } : value)
-      }).catch(() => undefined)
+      }).catch((reason) => {
+        if (isExpiredAnnotationAssignment(reason)) void recoverAssignment()
+      })
     }, 900)
     return () => window.clearTimeout(timer)
-  }, [answer, status])
+  }, [answer, recoverAssignment, status])
 
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
@@ -294,6 +346,10 @@ export default function AnnotationTasks({ initData, inviteCode, colorScheme }: P
       setAssignment({ ...assignment, draft_revision: saved.draft_revision, draft: answer })
       setStatus('ready')
     } catch (reason) {
+      if (isExpiredAnnotationAssignment(reason)) {
+        await recoverAssignment()
+        return
+      }
       setError(reason instanceof Error ? reason.message : 'Не удалось сохранить черновик')
       setStatus('ready')
     }
@@ -307,6 +363,10 @@ export default function AnnotationTasks({ initData, inviteCode, colorScheme }: P
       setEditorUrl(editor.url)
       window.location.assign(editor.url)
     } catch (reason) {
+      if (isExpiredAnnotationAssignment(reason)) {
+        await recoverAssignment()
+        return
+      }
       setError(reason instanceof Error ? reason.message : 'Не удалось открыть редактор')
     }
   }
@@ -341,6 +401,10 @@ export default function AnnotationTasks({ initData, inviteCode, colorScheme }: P
       const firstId = await loadCampaigns()
       await loadNext(campaignId || firstId)
     } catch (reason) {
+      if (isExpiredAnnotationAssignment(reason)) {
+        await recoverAssignment()
+        return
+      }
       setError(reason instanceof Error ? reason.message : 'Не удалось сохранить ответ')
       setStatus('ready')
     }
@@ -355,6 +419,10 @@ export default function AnnotationTasks({ initData, inviteCode, colorScheme }: P
       setUploadedName(file.name)
       setStatus('ready')
     } catch (reason) {
+      if (isExpiredAnnotationAssignment(reason)) {
+        await recoverAssignment()
+        return
+      }
       setError(reason instanceof Error ? reason.message : 'Не удалось загрузить результат')
       setStatus('ready')
     }
