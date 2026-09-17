@@ -1,4 +1,4 @@
-import { ApiError, del, fetchWithNetworkError, get, patch, post } from './client'
+import { ApiError, buildHeaders, del, fetchWithNetworkError, get, patch, post } from './client'
 import type {
   AccountResponse,
   AuthenticationResponse,
@@ -158,11 +158,12 @@ export async function uploadProjectSource(
   requiredHeaders: Record<string, string>,
 ): Promise<void> {
   const uploadOrigin = new URL(uploadUrl, window.location.origin).origin
+  const sameOrigin = uploadOrigin === window.location.origin
   const response = await fetchWithNetworkError(uploadUrl, {
     method: 'PUT',
-    headers: requiredHeaders,
+    headers: sameOrigin ? buildHeaders(requiredHeaders) : requiredHeaders,
     body: file,
-    credentials: uploadOrigin === window.location.origin ? 'include' : 'omit',
+    credentials: sameOrigin ? 'include' : 'omit',
   })
   if (!response.ok) {
     throw new ApiError(`Не удалось загрузить файл: HTTP ${response.status}`, response.status)

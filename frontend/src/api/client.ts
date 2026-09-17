@@ -44,7 +44,7 @@ function getInitData(): string | null {
 }
 
 /** Build headers with optional Authorization. */
-function buildHeaders(extra?: HeadersInit): Headers {
+export function buildHeaders(extra?: HeadersInit): Headers {
   const headers = new Headers(extra);
   const initData = getInitData();
   if (initData && !headers.has('Authorization')) {

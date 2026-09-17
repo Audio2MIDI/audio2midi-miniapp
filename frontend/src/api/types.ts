@@ -191,7 +191,7 @@ export interface LibraryArtifact {
 export interface LibraryItem {
   id: string;
   project_id: string | null;
-  source: 'job' | 'legacy';
+  source: 'job' | 'legacy' | 'project';
   engine: string;
   status: string;
   created_at: string;
@@ -330,6 +330,7 @@ export interface ProjectDetail {
   title: string;
   status: string;
   source_filename: string | null;
+  source_sha256?: string | null;
   source_size_bytes: number | null;
   source_mime_type: string | null;
   created_at: string;
