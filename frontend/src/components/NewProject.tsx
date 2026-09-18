@@ -2,15 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   authenticateWithTelegram,
-  completeProjectUpload,
   createPianoProcessingRequest,
   createProjectImport,
   createProjectUpload,
   getCurrentAccount,
+  getProject,
   getProjectImport,
   searchCatalog,
   submitProject,
-  uploadProjectSource,
 } from '../api/account'
 import { ApiError } from '../api/client'
 import { currentCampaignCode, recordCampaignEvent } from '../api/reels'
@@ -30,6 +29,7 @@ import {
   type UploadAttemptDraft,
 } from '../newProjectState'
 import { retryUpload } from '../uploadRetry'
+import { ensureProjectUpload } from '../projectUpload'
 import EmailAuthForm from './EmailAuthForm'
 import { PageHeading, ProductHeader, ProductLoading } from './ProductFrame'
 
@@ -92,10 +92,11 @@ function freeProcessingLabel(value: number | null): string {
 
 export default function NewProject({ initData, colorScheme }: NewProjectProps) {
   const savedDraft = useMemo(() => readProjectDraft(window.sessionStorage), [])
+  const resumeProjectId = useMemo(() => new URLSearchParams(window.location.search).get('resume'), [])
   const [page, setPage] = useState<PageState>({ kind: 'loading' })
   const [step, setStep] = useState<NewProjectStep>(() => stepFromSearch(window.location.search))
   const [file, setFile] = useState<File | null>(null)
-  const [sourceMode, setSourceMode] = useState<SourceMode>(savedDraft?.sourceMode ?? 'file')
+  const [sourceMode, setSourceMode] = useState<SourceMode>(resumeProjectId ? 'file' : savedDraft?.sourceMode ?? 'file')
   const [sourceUrl, setSourceUrl] = useState(savedDraft?.sourceUrl ?? '')
   const [catalogQuery, setCatalogQuery] = useState('')
   const [catalogTracks, setCatalogTracks] = useState<CatalogTrack[]>([])
@@ -168,7 +169,9 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
 
   function goToStep(next: NewProjectStep) {
     setError('')
-    window.history.pushState({}, '', `${window.location.pathname}${searchForStep(next)}`)
+    const search = new URLSearchParams(searchForStep(next))
+    if (resumeProjectId) search.set('resume', resumeProjectId)
+    window.history.pushState({}, '', `${window.location.pathname}?${search}`)
     setStep(next)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -254,15 +257,33 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
           size_bytes: file.size,
           mime_type: mimeType,
         }
-        projectId = await retryUpload(async (retry) => {
-          setProgress(retry === 0 ? 'Загружаем аудио…' : 'Повторяем загрузку…')
-          const upload = await createProjectUpload(uploadInput, attempt.idempotencyKey)
-          await uploadProjectSource(upload.upload_url, file, upload.required_headers)
-          await completeProjectUpload(upload.project.id)
-          return upload.project.id
-        }, {
-          onRetry: () => setProgress('Связь прервалась. Повторяем загрузку…'),
+        setProgress('Загружаем аудио…')
+        const upload = resumeProjectId
+          ? await (async () => {
+              const { project } = await getProject(resumeProjectId)
+              if (project.status !== 'uploading' || project.versions.length > 0) {
+                throw new Error('Этот проект уже отправлен на обработку. Откройте его в «Моих композициях».')
+              }
+              if (project.source_sha256 !== digest || project.source_size_bytes !== file.size) {
+                throw new Error('Это другой файл. Выберите исходное аудио, которое загружали в этот проект.')
+              }
+              return {
+                project,
+                upload_url: `/api/v1/me/projects/${encodeURIComponent(project.id)}/source`,
+                required_headers: { 'content-type': project.source_mime_type ?? mimeType, 'x-audio-sha256': digest },
+              }
+            })()
+          : await retryUpload(() => createProjectUpload(uploadInput, attempt.idempotencyKey))
+        await ensureProjectUpload({
+          projectId: upload.project.id,
+          uploadUrl: upload.upload_url,
+          headers: upload.required_headers,
+          file,
+          sha256: digest,
+          mimeType,
+          onFallback: () => setProgress('Прямая загрузка недоступна. Загружаем через сервер…'),
         })
+        projectId = upload.project.id
       } else {
         setProgress('Готовим источник…')
         const sourceValue = sourceMode === 'catalog' ? selectedTrack!.source_id : sourceUrl.trim()
@@ -327,10 +348,10 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
       <div className="cabinet-container">
         <ProductHeader backHref="/" backLabel="Мои композиции" />
         <PageHeading
-          eyebrow="Новая композиция"
+          eyebrow={resumeProjectId ? 'Продолжение загрузки' : 'Новая композиция'}
           title={step === 'source' ? 'Добавьте аудио' : step === 'result' ? 'Какой результат нужен?' : 'Всё готово к запуску'}
           description={step === 'source'
-            ? 'Загрузите файл, вставьте ссылку или найдите песню.'
+            ? resumeProjectId ? 'Выберите исходный файл, чтобы продолжить загрузку.' : 'Загрузите файл, вставьте ссылку или найдите песню.'
             : step === 'result'
               ? 'Выберите один результат — изменить решение можно до запуска.'
               : 'Проверьте источник и выбранный способ обработки.'}
@@ -362,12 +383,14 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
 
         {step === 'source' && (
           <section className="studio-panel">
+            {resumeProjectId && <p role="status">Продолжим загрузку в тот же проект. Выберите исходный аудиофайл — его копия не хранится в браузере.</p>}
             <div className="source-tabs" role="tablist" aria-label="Источник аудио">
               {([['file', 'Файл'], ['link', 'Ссылка'], ['catalog', 'Найти песню']] as const).map(([mode, label]) => (
                 <button
                   className={sourceMode === mode ? 'source-tab source-tab--active' : 'source-tab'}
                   aria-selected={sourceMode === mode}
                   key={mode}
+                  disabled={Boolean(resumeProjectId) && mode !== 'file'}
                   onClick={() => { setSourceMode(mode); setError('') }}
                   role="tab"
                   type="button"
@@ -424,10 +447,10 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
               </div>
             )}
 
-            <label className="studio-field">
+            {!resumeProjectId && <label className="studio-field">
               <span>Название композиции</span>
               <input value={title} maxLength={255} placeholder="Заполнится автоматически" onChange={(event) => setTitle(event.target.value)} />
-            </label>
+            </label>}
           </section>
         )}
 

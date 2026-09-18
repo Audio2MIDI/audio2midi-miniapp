@@ -361,6 +361,16 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
           action={<StatusBadge status={project.status}>{STATUS_LABELS[project.status] ?? project.status}</StatusBadge>}
         />
 
+        {project.status === 'uploading' && project.versions.length === 0 && (
+          <section className="queue-panel">
+            <div>
+              <h2>Загрузка ещё не завершена</h2>
+              <p>Выберите исходный аудиофайл ещё раз. Продолжим в этом проекте, без создания копии.</p>
+              <a className="primary-action" href={`/new?resume=${encodeURIComponent(project.id)}`}>Продолжить загрузку</a>
+            </div>
+          </section>
+        )}
+
         {['queued', 'processing'].includes(project.status) && (
           <section className="queue-panel">
             <div className="queue-panel__pulse" aria-hidden="true">♪</div>

@@ -53,6 +53,7 @@ const METHOD_NAMES: Record<string, string> = {
 }
 
 const STATUS_NAMES: Record<string, string> = {
+  uploading: 'Загрузка не завершена',
   queued: 'В очереди',
   leased: 'Назначено серверу',
   running: 'Обрабатывается',
