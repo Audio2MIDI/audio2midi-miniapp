@@ -12,6 +12,7 @@ import {
 } from '../api/account'
 import type { LyricsMode, VideoAspectRatio } from '../api/account'
 import { ApiError } from '../api/client'
+import { projectLoadRetryDelay } from '../projectPolling'
 import {
   downloadIntentUrl,
   trackProductEvent,
@@ -94,6 +95,7 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
   useEffect(() => {
     let cancelled = false
     let timer: number | undefined
+    let failures = 0
     async function load() {
       try {
         let response
@@ -136,12 +138,15 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
         const capabilities = await getEditorCapabilities().catch(() => null)
         if (!cancelled) setEditorEnabled(Boolean(capabilities?.enabled))
         setError('')
+        failures = 0
         if (['queued', 'processing'].includes(response.project.status)) timer = window.setTimeout(() => void load(), 4000)
       } catch (loadError) {
         if (cancelled) return
         setError(loadError instanceof ApiError && loadError.status === 401
           ? 'Войдите в кабинет, чтобы открыть эту композицию.'
           : 'Не удалось загрузить композицию.')
+        const delay = projectLoadRetryDelay(loadError, ++failures)
+        if (delay !== null) timer = window.setTimeout(() => void load(), delay)
       }
     }
     void load()
