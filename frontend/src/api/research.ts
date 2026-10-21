@@ -202,10 +202,13 @@ export interface DatasetAuditReview {
   session_id: string
   card_id: string
   same_composition: DatasetAuditTriState
+  full_arrangement: DatasetAuditTriState
   piano_clean: DatasetAuditTriState
   target_suitable: DatasetAuditTriState
+  midi_matches_target_audio: DatasetAuditTriState
   arrangement_type: DatasetAuditArrangementType
   extra_instruments: DatasetAuditTriState
+  defect_tags: string[]
   comment: string
   response_ms: number
 }

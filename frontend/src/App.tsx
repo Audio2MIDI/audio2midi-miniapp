@@ -18,6 +18,7 @@ const Support = lazy(() => import('./components/Support'))
 const AnalyticsDashboard = lazy(() => import('./components/AnalyticsDashboard'))
 const OpenResult = lazy(() => import('./components/OpenResult'))
 const BrowserHandoff = lazy(() => import('./components/BrowserHandoff'))
+const AnnotationTasks = lazy(() => import('./components/AnnotationTasks'))
 
 function route(content: ReactNode) {
   return <Suspense fallback={<ProductLoading />}>{content}</Suspense>
@@ -33,9 +34,20 @@ function App() {
     midiParam,
     fileUrl,
     returnPath: telegramReturnPath,
+    annotationInviteCode,
   } = useTelegram()
   const queryReturnPath = safeEditorReturnPath(new URLSearchParams(window.location.search).get('next'))
   const returnPath = queryReturnPath ?? telegramReturnPath
+
+  if (window.location.pathname === '/tasks' || annotationInviteCode) {
+    return route(
+      <AnnotationTasks
+        initData={initData}
+        inviteCode={annotationInviteCode}
+        colorScheme={colorScheme}
+      />,
+    )
+  }
 
   if (window.location.pathname.startsWith('/research/dataset-audit')) {
     return route(<DatasetAuditLab initData={initData} colorScheme={colorScheme} />)

@@ -26,20 +26,26 @@ type CompletedAuditForm = Omit<
 >
 type AuditForm = {
   same_composition: DatasetAuditTriState | ''
+  full_arrangement: DatasetAuditTriState | ''
   piano_clean: DatasetAuditTriState | ''
   target_suitable: DatasetAuditTriState | ''
+  midi_matches_target_audio: DatasetAuditTriState | ''
   arrangement_type: DatasetAuditArrangementType | ''
   extra_instruments: DatasetAuditTriState | ''
+  defect_tags: string[]
   comment: string
 }
-type AuditField = Exclude<keyof AuditForm, 'comment'>
+type AuditField = Exclude<keyof AuditForm, 'comment' | 'defect_tags'>
 
 const INITIAL_FORM: AuditForm = {
   same_composition: '',
+  full_arrangement: '',
   piano_clean: '',
   target_suitable: '',
+  midi_matches_target_audio: '',
   arrangement_type: '',
   extra_instruments: '',
+  defect_tags: [],
   comment: '',
 }
 
@@ -60,6 +66,20 @@ const ARRANGEMENT_OPTIONS: Array<{
   { value: 'unsure', label: 'Не уверен' },
 ]
 
+const DEFECT_OPTIONS = [
+  ['drums_present', 'Слышны барабаны'],
+  ['other_instrument_present', 'Слышен другой инструмент'],
+  ['vocal_leakage', 'Слышен голос'],
+  ['wrong_song', 'Другая композиция'],
+  ['different_excerpt', 'Выбраны разные части песни'],
+  ['incomplete_arrangement', 'Нет части мелодии или сопровождения'],
+  ['transcription_noise', 'Лишние или случайные ноты'],
+  ['timing_mismatch', 'MIDI заметно расходится по времени'],
+  ['over_arranged', 'Кавер слишком сильно изменён'],
+  ['audio_noise', 'Шум или искажения записи'],
+  ['broken_audio', 'Обрыв или дефект звука'],
+] as const
+
 function auditSessionId(): string {
   const key = 'audio2midi-dataset-audit-session'
   const existing = window.localStorage.getItem(key)
@@ -72,8 +92,10 @@ function auditSessionId(): string {
 function isComplete(form: AuditForm): form is CompletedAuditForm {
   return Boolean(
     form.same_composition
+    && form.full_arrangement
     && form.piano_clean
     && form.target_suitable
+    && form.midi_matches_target_audio
     && form.arrangement_type
     && form.extra_instruments,
   )
@@ -203,21 +225,33 @@ export default function DatasetAuditLab({
     setForm((current) => ({ ...current, [field]: value }))
   }
 
+  function toggleDefect(tag: string) {
+    setForm((current) => {
+      const tags = new Set(current.defect_tags)
+      if (tags.has(tag)) tags.delete(tag)
+      else tags.add(tag)
+      return { ...current, defect_tags: [...tags] }
+    })
+  }
+
   async function submit(filesBroken = false) {
     if (!card || status === 'submitting') return
     let values: CompletedAuditForm
     if (filesBroken) {
       values = {
         same_composition: 'files_broken',
+        full_arrangement: 'files_broken',
         piano_clean: 'files_broken',
         target_suitable: 'files_broken',
+        midi_matches_target_audio: 'files_broken',
         arrangement_type: 'files_broken',
         extra_instruments: 'files_broken',
+        defect_tags: [],
         comment: form.comment,
       }
     } else {
       if (!isComplete(form)) {
-        setError('Ответьте на 5 вопросов или отметьте, что файлы не открываются.')
+        setError('Ответьте на все вопросы или отметьте, что файлы не открываются.')
         return
       }
       values = form
@@ -281,7 +315,7 @@ export default function DatasetAuditLab({
         {status !== 'loading' && !card && !error && (
           <section className="research-complete">
             <span>✓</span>
-            <h2>Все 100 пар проверены</h2>
+            <h2>Все пары проверены</h2>
             <p>Теперь можно собрать high-confidence выборку и сравнить режимы обучения.</p>
           </section>
         )}
@@ -335,10 +369,32 @@ export default function DatasetAuditLab({
                 options={TRI_STATE_OPTIONS}
                 onChange={updateField}
               />
+              <fieldset className="dataset-audit-fieldset">
+                <legend>Какие дефекты заметны? Можно выбрать несколько</legend>
+                <div className="dataset-audit-choices dataset-audit-defects">
+                  {DEFECT_OPTIONS.map(([tag, label]) => (
+                    <label key={tag}>
+                      <input
+                        type="checkbox"
+                        checked={form.defect_tags.includes(tag)}
+                        onChange={() => toggleDefect(tag)}
+                      />
+                      <span>{label}</span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
               <ChoiceGroup
                 name="piano_clean"
                 label={card.question.piano_clean ?? 'В фортепианной версии слышно только пианино?'}
                 value={form.piano_clean}
+                options={TRI_STATE_OPTIONS}
+                onChange={updateField}
+              />
+              <ChoiceGroup
+                name="full_arrangement"
+                label={card.question.full_arrangement ?? 'Это полный фортепианный кавер с вокальной мелодией?'}
+                value={form.full_arrangement}
                 options={TRI_STATE_OPTIONS}
                 onChange={updateField}
               />
@@ -354,6 +410,13 @@ export default function DatasetAuditLab({
                 label={card.question.arrangement_type ?? 'Какой это тип аранжировки?'}
                 value={form.arrangement_type}
                 options={ARRANGEMENT_OPTIONS}
+                onChange={updateField}
+              />
+              <ChoiceGroup
+                name="midi_matches_target_audio"
+                label={card.question.midi_matches_target_audio ?? 'Звучание MIDI соответствует целевой фортепианной версии?'}
+                value={form.midi_matches_target_audio}
+                options={TRI_STATE_OPTIONS}
                 onChange={updateField}
               />
               <ChoiceGroup

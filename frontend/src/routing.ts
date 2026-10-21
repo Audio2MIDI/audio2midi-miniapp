@@ -4,6 +4,7 @@ const EDITOR_PATH_RE =
 export interface TelegramStartRoute {
   midiParam: string | null
   returnPath: string | null
+  annotationInviteCode: string | null
 }
 
 const OPEN_RESULT_PATH_RE =
@@ -62,21 +63,46 @@ export function parseTelegramStartParam(
   startParam: string | null | undefined,
 ): TelegramStartRoute {
   if (!startParam || startParam === 'cabinet') {
-    return { midiParam: null, returnPath: null }
+    return { midiParam: null, returnPath: null, annotationInviteCode: null }
   }
   if (startParam.startsWith('editor_')) {
     const returnPath = safeEditorReturnPath(
       `/editor/${startParam.slice('editor_'.length)}`,
     )
-    return { midiParam: null, returnPath }
+    return { midiParam: null, returnPath, annotationInviteCode: null }
+  }
+  if (startParam.startsWith('annotate_')) {
+    const code = startParam.slice('annotate_'.length)
+    return {
+      midiParam: null,
+      returnPath: null,
+      annotationInviteCode: /^[a-zA-Z0-9_-]{24,128}$/.test(code) ? code : null,
+    }
   }
   if (startParam.startsWith('midi_')) {
     return {
       midiParam: startParam.slice('midi_'.length) || null,
       returnPath: null,
+      annotationInviteCode: null,
     }
   }
-  return { midiParam: startParam, returnPath: null }
+  return { midiParam: startParam, returnPath: null, annotationInviteCode: null }
+}
+
+export function annotationInviteFromQuery(
+  search: string,
+  enabled: boolean,
+): string | null {
+  if (!enabled) return null
+  const code = new URLSearchParams(search).get('invite')
+  return code && /^[a-zA-Z0-9_-]{24,128}$/.test(code) ? code : null
+}
+
+export function pathWithoutAnnotationInvite(url: string): string {
+  const parsed = new URL(url)
+  parsed.searchParams.delete('invite')
+  const query = parsed.searchParams.toString()
+  return `${parsed.pathname}${query ? `?${query}` : ''}${parsed.hash}`
 }
 
 export function telegramLoginUrl(returnPath: string | null): string {

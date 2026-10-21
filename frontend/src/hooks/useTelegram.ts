@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { parseTelegramStartParam } from '../routing'
+import { annotationInviteFromQuery, parseTelegramStartParam } from '../routing'
 
 // Piano Roll доступен всем юзерам
 const ADMIN_IDS: number[] = []  // Пустой = доступ всем
@@ -22,6 +22,7 @@ interface UseTelegramResult {
   midiParam: string | null  // MIDI ID from start_param or URL
   fileUrl: string | null    // Direct MIDI file URL (e.g. S3)
   returnPath: string | null
+  annotationInviteCode: string | null
 }
 
 interface TelegramWebApp {
@@ -53,6 +54,10 @@ function getInitialTelegramState(): TelegramState {
   const telegramUser = webApp?.initDataUnsafe?.user ?? null
   const startParam = webApp?.initDataUnsafe?.start_param
   const startRoute = parseTelegramStartParam(startParam)
+  const queryInvite = annotationInviteFromQuery(
+    window.location.search,
+    import.meta.env.VITE_ANNOTATION_INVITE_QUERY === 'true',
+  )
   const midiParam = startParam ? startRoute.midiParam : urlMidi
 
   if (telegramUser) {
@@ -68,6 +73,7 @@ function getInitialTelegramState(): TelegramState {
       midiParam,
       fileUrl,
       returnPath: startRoute.returnPath,
+      annotationInviteCode: startRoute.annotationInviteCode ?? queryInvite,
     }
   }
 
@@ -84,6 +90,7 @@ function getInitialTelegramState(): TelegramState {
       midiParam,
       fileUrl,
       returnPath: startRoute.returnPath,
+      annotationInviteCode: startRoute.annotationInviteCode ?? queryInvite,
     }
   }
 
@@ -100,6 +107,7 @@ function getInitialTelegramState(): TelegramState {
     midiParam,
     fileUrl,
     returnPath: startRoute.returnPath,
+    annotationInviteCode: startRoute.annotationInviteCode ?? queryInvite,
   }
 }
 
