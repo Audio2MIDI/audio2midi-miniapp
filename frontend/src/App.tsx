@@ -1,7 +1,7 @@
 import { lazy, Suspense, type ReactNode } from 'react'
 
 import { useTelegram } from './hooks/useTelegram'
-import { openResultItemId, paymentReturnIntent, safeEditorReturnPath } from './routing'
+import { openResultItemId, paymentReturnIntent, safeAuthReturnPath } from './routing'
 import { ProductLoading } from './components/ProductFrame'
 
 const Billing = lazy(() => import('./components/Billing'))
@@ -34,7 +34,7 @@ function App() {
     fileUrl,
     returnPath: telegramReturnPath,
   } = useTelegram()
-  const queryReturnPath = safeEditorReturnPath(new URLSearchParams(window.location.search).get('next'))
+  const queryReturnPath = safeAuthReturnPath(new URLSearchParams(window.location.search).get('next'))
   const returnPath = queryReturnPath ?? telegramReturnPath
 
   if (window.location.pathname.startsWith('/research/dataset-audit')) {

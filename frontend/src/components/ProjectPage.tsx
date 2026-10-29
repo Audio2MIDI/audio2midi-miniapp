@@ -69,6 +69,7 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
   const [project, setProject] = useState<ProjectDetail | null>(null)
   const [editorEnabled, setEditorEnabled] = useState(false)
   const [error, setError] = useState('')
+  const [loginRequired, setLoginRequired] = useState(false)
   const [videoBusy, setVideoBusy] = useState<VideoAspectRatio | null>(null)
   const [lyricsMode, setLyricsMode] = useState<LyricsMode>('automatic')
   const [lyricsText, setLyricsText] = useState('')
@@ -110,6 +111,7 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
           response = await getProject(projectId)
         }
         if (cancelled) return
+        setLoginRequired(false)
         setProject(response.project)
         const currentVersionId = response.project.versions[0]?.version_id
         const feedbackEnabled = response.project.feedback_v2?.enabled === true
@@ -142,6 +144,7 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
         if (['queued', 'processing'].includes(response.project.status)) timer = window.setTimeout(() => void load(), 4000)
       } catch (loadError) {
         if (cancelled) return
+        setLoginRequired(loadError instanceof ApiError && loadError.status === 401)
         setError(loadError instanceof ApiError && loadError.status === 401
           ? 'Войдите в кабинет, чтобы открыть эту композицию.'
           : 'Не удалось загрузить композицию.')
@@ -348,7 +351,7 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
   if (!project) {
     return (
       <main className="cabinet-shell cabinet-shell--centered" data-theme={colorScheme}>
-        <section className="studio-message"><h1>Композиция недоступна</h1><p>{error}</p><a className="secondary-action" href="/">Вернуться в кабинет</a></section>
+        <section className="studio-message"><h1>Композиция недоступна</h1><p>{error}</p><a className="secondary-action" href={loginRequired ? `/?login=1&next=${encodeURIComponent(`/tracks/${projectId}`)}` : '/'}>{loginRequired ? 'Войти и открыть композицию' : 'Вернуться в кабинет'}</a></section>
       </main>
     )
   }

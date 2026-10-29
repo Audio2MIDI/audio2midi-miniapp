@@ -51,11 +51,34 @@ export function safeEditorReturnPath(
   }
 }
 
+// Allow only product destinations; never redirect to an arbitrary URL.
+export function safeAuthReturnPath(candidate: string | null | undefined): string | null {
+  const editor = safeEditorReturnPath(candidate)
+  if (editor) return editor
+  if (!candidate || candidate.includes('\\') || !candidate.startsWith('/') || candidate.startsWith('//')) return null
+  const parsed = new URL(candidate, 'https://app.audio2midi.ru')
+  if (parsed.hash) return null
+  const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}'
+  if (new RegExp(`^/tracks/${uuid}/?$`, 'i').test(parsed.pathname) && !parsed.search) return parsed.pathname
+  if (parsed.pathname !== '/new') return null
+  const entries = [...parsed.searchParams.entries()]
+  if (entries.length === 0) return '/new'
+  if (entries.length === 1 && entries[0][0] === 'resume' && new RegExp(`^${uuid}$`, 'i').test(entries[0][1])) {
+    return `/new?resume=${entries[0][1]}`
+  }
+  return null
+}
+
 export function telegramStartParamForReturnPath(
   returnPath: string | null,
 ): string {
-  const match = returnPath?.match(EDITOR_PATH_RE)
-  return match ? `editor_${match[1]}` : 'cabinet'
+  const safe = safeAuthReturnPath(returnPath)
+  const match = safe?.match(EDITOR_PATH_RE)
+  if (match) return `editor_${match[1]}`
+  if (safe?.startsWith('/tracks/')) return `track_${safe.split('/')[2]}`
+  if (safe === '/new') return 'new'
+  if (safe?.startsWith('/new?resume=')) return `resume_${new URLSearchParams(safe.split('?')[1]).get('resume')}`
+  return 'cabinet'
 }
 
 export function parseTelegramStartParam(
@@ -63,6 +86,11 @@ export function parseTelegramStartParam(
 ): TelegramStartRoute {
   if (!startParam || startParam === 'cabinet') {
     return { midiParam: null, returnPath: null }
+  }
+  if (startParam === 'new' || startParam.startsWith('track_') || startParam.startsWith('resume_')) {
+    const candidate = startParam === 'new' ? '/new' : startParam.startsWith('track_')
+      ? `/tracks/${startParam.slice(6)}` : `/new?resume=${startParam.slice(7)}`
+    return { midiParam: null, returnPath: safeAuthReturnPath(candidate) }
   }
   if (startParam.startsWith('editor_')) {
     const returnPath = safeEditorReturnPath(

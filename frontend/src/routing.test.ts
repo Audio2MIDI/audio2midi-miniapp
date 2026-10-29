@@ -5,6 +5,7 @@ import {
   openResultItemId,
   paymentReturnIntent,
   safeEditorReturnPath,
+  safeAuthReturnPath,
   telegramLoginUrl,
 } from './routing'
 
@@ -88,5 +89,32 @@ describe('payment return routing', () => {
     expect(paymentReturnIntent('?intent=canonical&Shp_intent=provider')).toBe(
       'canonical',
     )
+  })
+})
+
+
+describe('login journey destinations', () => {
+  it.each([
+    [`/tracks/${PROJECT_ID}`, `track_${PROJECT_ID}`],
+    ['/new', 'new'],
+    [`/new?resume=${PROJECT_ID}`, `resume_${PROJECT_ID}`],
+  ])('round trips %s through Telegram login', (path, start) => {
+    expect(safeAuthReturnPath(path)).toBe(path)
+    expect(telegramLoginUrl(path)).toBe(`https://t.me/Audio2MIDIBot?startapp=${start}`)
+    expect(parseTelegramStartParam(start)).toEqual({ midiParam: null, returnPath: path })
+  })
+
+  it.each([
+    '//evil.example/new', 'https://evil.example/new', '/new?resume=bad',
+    `/new?resume=${PROJECT_ID}&next=https://evil.example`,
+    `/new?resume=${PROJECT_ID}&resume=${PROJECT_ID}`,
+    '/new#redirect', '/profile', `/tracks/${PROJECT_ID}?next=/profile`,
+  ])('rejects unexpected login destination %s', (path) => {
+    expect(safeAuthReturnPath(path)).toBeNull()
+    expect(telegramLoginUrl(path)).toContain('startapp=cabinet')
+  })
+
+  it.each(['track_bad', 'resume_bad'])('does not interpret invalid product links as MIDI: %s', (start) => {
+    expect(parseTelegramStartParam(start)).toEqual({ midiParam: null, returnPath: null })
   })
 })
