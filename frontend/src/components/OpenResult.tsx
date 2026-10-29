@@ -21,12 +21,14 @@ function messageFor(error: unknown): string {
 
 export default function OpenResult({ itemId, initData, colorScheme }: OpenResultProps) {
   const [error, setError] = useState('')
+  const [loginRequired, setLoginRequired] = useState(false)
   const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     let cancelled = false
     async function open() {
       setError('')
+      setLoginRequired(false)
       try {
         let materialized
         try {
@@ -42,7 +44,10 @@ export default function OpenResult({ itemId, initData, colorScheme }: OpenResult
         if (cancelled) return
         window.location.replace(`/tracks/${materialized.project_id}`)
       } catch (openError) {
-        if (!cancelled) setError(messageFor(openError))
+        if (!cancelled) {
+          setLoginRequired(openError instanceof ApiError && openError.status === 401)
+          setError(messageFor(openError))
+        }
       }
     }
     void open()
@@ -58,7 +63,7 @@ export default function OpenResult({ itemId, initData, colorScheme }: OpenResult
         <p>{error}</p>
         <div className="workspace-actions">
           <button className="primary-action" onClick={() => setAttempt((value) => value + 1)} type="button">Повторить</button>
-          <a className="secondary-action" href="/">Мои работы</a>
+          <a className="secondary-action" href={loginRequired ? `/?login=1&next=${encodeURIComponent(`/open/${itemId}`)}` : '/'}>{loginRequired ? 'Войти и открыть результат' : 'Мои работы'}</a>
         </div>
       </section>
     </main>
