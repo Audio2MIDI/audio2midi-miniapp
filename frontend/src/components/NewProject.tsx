@@ -11,6 +11,7 @@ import {
   searchCatalog,
   submitProject,
 } from '../api/account'
+import { telegramLoginUrl } from '../routing'
 import { ApiError } from '../api/client'
 import { currentCampaignCode, recordCampaignEvent } from '../api/reels'
 import type { AccountSummary, CatalogTrack } from '../api/types'
@@ -323,7 +324,7 @@ export default function NewProject({ initData, colorScheme }: NewProjectProps) {
             setAuthNonce((value) => value + 1)
           }} />
           <div className="auth-method-divider"><span>или</span></div>
-          <a className="secondary-action" href="https://t.me/Audio2MIDIBot?startapp=cabinet">Войти через Telegram</a>
+          <a className="secondary-action" href={telegramLoginUrl(resumeProjectId ? `/new?resume=${resumeProjectId}` : '/new')}>Войти через Telegram</a>
         </section>
       </main>
     )
