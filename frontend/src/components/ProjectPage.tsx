@@ -1,3 +1,4 @@
+import { projectDisplayStatus } from '../projectDisplayStatus'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
@@ -111,6 +112,7 @@ export default function ProjectPage({ projectId, initData, colorScheme }: Projec
           response = await getProject(projectId)
         }
         if (cancelled) return
+        response.project.status = projectDisplayStatus(response.project)
         setLoginRequired(false)
         setProject(response.project)
         const currentVersionId = response.project.versions[0]?.version_id
