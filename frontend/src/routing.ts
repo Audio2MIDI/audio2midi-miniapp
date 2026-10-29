@@ -58,6 +58,7 @@ export function safeAuthReturnPath(candidate: string | null | undefined): string
   if (!candidate || candidate.includes('\\') || !candidate.startsWith('/') || candidate.startsWith('//')) return null
   const parsed = new URL(candidate, 'https://app.audio2midi.ru')
   if (parsed.hash) return null
+  if (openResultItemId(parsed.pathname) && !parsed.search) return parsed.pathname
   const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}'
   if (new RegExp(`^/tracks/${uuid}/?$`, 'i').test(parsed.pathname) && !parsed.search) return parsed.pathname
   if (parsed.pathname !== '/new') return null
@@ -76,6 +77,7 @@ export function telegramStartParamForReturnPath(
   const match = safe?.match(EDITOR_PATH_RE)
   if (match) return `editor_${match[1]}`
   if (safe?.startsWith('/tracks/')) return `track_${safe.split('/')[2]}`
+  if (safe?.startsWith('/open/')) return `result_${safe.slice(6)}`
   if (safe === '/new') return 'new'
   if (safe?.startsWith('/new?resume=')) return `resume_${new URLSearchParams(safe.split('?')[1]).get('resume')}`
   return 'cabinet'
@@ -87,8 +89,8 @@ export function parseTelegramStartParam(
   if (!startParam || startParam === 'cabinet') {
     return { midiParam: null, returnPath: null }
   }
-  if (startParam === 'new' || startParam.startsWith('track_') || startParam.startsWith('resume_')) {
-    const candidate = startParam === 'new' ? '/new' : startParam.startsWith('track_')
+  if (startParam === 'new' || startParam.startsWith('track_') || startParam.startsWith('resume_') || startParam.startsWith('result_')) {
+    const candidate = startParam.startsWith('result_') ? `/open/${startParam.slice(7)}` : startParam === 'new' ? '/new' : startParam.startsWith('track_')
       ? `/tracks/${startParam.slice(6)}` : `/new?resume=${startParam.slice(7)}`
     return { midiParam: null, returnPath: safeAuthReturnPath(candidate) }
   }

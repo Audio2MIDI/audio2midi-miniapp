@@ -97,6 +97,8 @@ describe('login journey destinations', () => {
   it.each([
     [`/tracks/${PROJECT_ID}`, `track_${PROJECT_ID}`],
     ['/new', 'new'],
+    [`/open/${PROJECT_ID}`, `result_${PROJECT_ID}`],
+    ['/open/legacy-42', 'result_legacy-42'],
     [`/new?resume=${PROJECT_ID}`, `resume_${PROJECT_ID}`],
   ])('round trips %s through Telegram login', (path, start) => {
     expect(safeAuthReturnPath(path)).toBe(path)
@@ -108,7 +110,7 @@ describe('login journey destinations', () => {
     '//evil.example/new', 'https://evil.example/new', '/new?resume=bad',
     `/new?resume=${PROJECT_ID}&next=https://evil.example`,
     `/new?resume=${PROJECT_ID}&resume=${PROJECT_ID}`,
-    '/new#redirect', '/profile', `/tracks/${PROJECT_ID}?next=/profile`,
+    '/new#redirect', '/profile', '/open/legacy-0', '/open/legacy-42?next=/profile', `/tracks/${PROJECT_ID}?next=/profile`,
   ])('rejects unexpected login destination %s', (path) => {
     expect(safeAuthReturnPath(path)).toBeNull()
     expect(telegramLoginUrl(path)).toContain('startapp=cabinet')
