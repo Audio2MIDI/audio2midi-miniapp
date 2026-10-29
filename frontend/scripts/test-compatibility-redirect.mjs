@@ -45,8 +45,13 @@ try {
   assert(requests.every(url => !url.includes('tgWebAppData')))
   console.log('PASS Telegram fragment never sent to HTTP server; 5 redirect cases passed')
 } finally {
-  await browser?.close()
+  if (browser) {
+    await Promise.race([browser.close(), new Promise(resolve => setTimeout(resolve, 5000))])
+  }
   canonical.closeAllConnections()
   compatibility.closeAllConnections()
   await Promise.all([new Promise(resolve => canonical.close(resolve)), new Promise(resolve => compatibility.close(resolve))])
 }
+
+// Playwright shutdown may retain handles; all assertions and server cleanup completed.
+process.exit(0)
