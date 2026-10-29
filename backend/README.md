@@ -1,6 +1,9 @@
-# Audio2MIDI Mini App — Backend API
+# Audio2MIDI legacy MIDI API
 
-FastAPI backend для Telegram Mini App.
+Исторический MIDI-only backend. Текущий личный кабинет использует account API
+`web_api/app.py` из основного репозитория Audio2MIDI на порту 8400.
+Этот каталог не запускается основным Compose; инструкции для актуального
+клиента находятся в [корневом README](../README.md).
 
 ## Setup
 
@@ -11,7 +14,8 @@ uv sync
 
 ## Configuration
 
-Переменные окружения (см. `../.env.example`):
+Переменные окружения для отдельного legacy-запуска (задаются в shell либо
+в игнорируемом `backend/.env`; корневой `.env.example` теперь относится к frontend):
 - `BOT_TOKEN` — Telegram bot token (обязательно для валидации initData)
 - `ADMIN_IDS` — ID админов через запятую
 - `MIDI_DIR` — директория для MIDI файлов (по умолчанию `/data/midi`)
@@ -19,7 +23,7 @@ uv sync
 ## Run
 
 ```bash
-uv run uvicorn app:app --host 0.0.0.0 --port 3001 --reload
+uv run uvicorn app:app --host 127.0.0.1 --port 3001 --reload
 ```
 
 ## API Endpoints

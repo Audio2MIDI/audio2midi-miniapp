@@ -10,6 +10,8 @@ frontend/test-results/
 
 # Environment
 .env
+.env.*
+!.env.example
 *.local
 
 # Python
