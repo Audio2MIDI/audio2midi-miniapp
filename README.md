@@ -1,242 +1,131 @@
-# Audio2MIDI Web App
+# Audio2MIDI Mini App
 
-Личный кабинет и Piano Roll визуализатор Audio2MIDI. Корневая страница
-показывает подписку, активные задания и историю результатов. Режим
-`?file=...`, `?midi=...` или `/visualizer` открывает существующий Piano Roll.
+React, TypeScript and Vite client for the Audio2MIDI account, project library,
+uploads, processing results and Canvas Piano Roll with Tone.js playback.
+The account API is `web_api/app.py` in the separate `Audio2MIDI/Audio2MIDI`
+repository. The old MIDI-only server and unused client helpers were retired;
+[LEGACY_CLEANUP.md](LEGACY_CLEANUP.md) records recovery commits and the compatibility
+reader retained for existing MIDI links. `frontend/dist` is generated, not tracked.
 
-Продакшн расположен на управляемом Audio2MIDI VPS:
-`https://app.audio2midi.ru`. Статика обслуживается nginx, а `/api/`
-проксируется в защищённый account API на loopback-порту 8400. Старый backend
-мини-приложения на порту 3001 не является production API.
+## Local development
 
-Визуальный язык кабинета синхронизирован с лендингом `audio2midi.ru`:
-Montserrat для интерфейса, Iowan/Palatino/Georgia для крупных заголовков,
-почти чёрный фон с мягкими цветными свечениями, тонкие светлые границы и
-синий основной action. Эталон реализации — ветка `redesign` репозитория
-`Audio2MIDI/WebApp`; кабинет развёрнут независимо и не требует VPS лендинга.
-
-Piano Roll визуализатор MIDI файлов для Telegram Mini App.  
-Работает целиком в браузере — парсит MIDI и рисует ноты на Canvas с воспроизведением через Grand Piano (Salamander samples).
-
-## Quick Start (Docker)
+Use Node.js 22. The examples assume sibling clones named `Audio2MIDI` and
+`audio2midi-miniapp`, as in this workspace. First prepare the account API from
+the **Audio2MIDI backend repository**, using a development PostgreSQL database
+with its migrations and private S3-compatible development storage:
 
 ```bash
-# 1. Настроить окружение
+cd ../Audio2MIDI
+uv sync --python 3.12 --extra dev
+# Prepare ignored .env.local with development configuration, then:
+WEB_SESSION_SECURE=false WEB_APP_BASE_URL=http://localhost:3000 \
+  uv run --env-file .env.local uvicorn web_api.app:app \
+  --host 127.0.0.1 --port 8400 --reload
+```
+
+Required runtime values include `POSTGRES_DSN`, `S3_ENDPOINT`, `S3_BUCKET`,
+`S3_ACCESS_KEY` and `S3_SECRET_KEY`; `S3_REGION` is optional. Set `BOT_TOKEN` for
+Telegram auth, or configure the optional email auth provider. See the backend's
+`docs/ACCOUNT_CORE.md` and `docs/WEB_ACCOUNT.md` for auth and migration details.
+These are server values, never frontend build variables. Disable secure cookies
+only for local HTTP. Starting this API does not start GPU workers or the bot;
+processing needs a separately configured development worker.
+
+In another terminal:
+
+```bash
+cd ../audio2midi-miniapp/frontend
+npm ci
+npm run dev
+```
+
+Open `http://localhost:3000`. Vite strips `/api/` and proxies to
+`http://127.0.0.1:8400/`. To use another local API, set the host and port:
+
+```bash
+ACCOUNT_API_UPSTREAM=127.0.0.1:18400 npm run dev
+```
+
+The frontend repo's `.env` configures Docker Compose. Shell variables configure
+the Vite proxy; it does not read the Compose `.env` automatically.
+`?dev=1` enables the UI development mode; it does not grant API authentication.
+`/visualizer` and `?file=<MIDI URL>` can display MIDI without an account API,
+subject to the source server's CORS policy.
+
+## Local Docker frontend
+
+Compose builds the frontend and nginx, then proxies to an account API running
+on the host. It does not launch a database, S3, GPU inference or the old API.
+
+```bash
 cp .env.example .env
-# Отредактировать .env — указать BOT_TOKEN
-
-# 2. Собрать и запустить
-docker compose up -d --build
-
-# 3. Проверить статус
-docker compose ps
+# Start the development account API as above, using port 8400.
+docker compose up -d --build frontend
+curl --fail http://localhost:8080/health
+curl --fail http://localhost:8080/api/health
 ```
 
-Приложение будет доступно на порту 80.
+Open `http://localhost:8080`. The first health check is nginx; the second must
+reach the account API. Configure the backend's local `WEB_APP_BASE_URL` to this
+origin and keep `WEB_SESSION_SECURE=false` for local HTTP. Same-origin proxying
+preserves session cookies and avoids browser CORS requirements for the API.
 
-## Quick Start (Dev)
+| Compose variable | Default | Meaning |
+| --- | --- | --- |
+| `LOCAL_PORT` | `8080` | Loopback host port for the frontend |
+| `ACCOUNT_API_UPSTREAM` | `host.docker.internal:8400` | HTTP API host and port, without scheme, path or trailing slash |
+
+Docker Desktop forwards `host.docker.internal` to the host. On Linux Engine,
+the host-gateway alias resolves the bridge gateway; the host API must listen on
+that reachable interface. Use `--host 0.0.0.0` only in an isolated development
+environment with firewall rules that keep the API private. Override the upstream
+if the API is in another local container/network.
+
+An unavailable upstream produces an API proxy error; `/health` alone is not an
+API readiness check. To stop this local frontend, run `docker compose down`.
+
+## API boundary and features
+
+The browser calls `/api/v1/...`; the account API receives `/v1/...`. nginx and
+Vite preserve query strings, request bodies, auth headers and session cookies.
+The Docker proxy accepts bodies up to 21 MiB, matching the 20 MiB source limit
+plus request overhead. Public campaign links `/r/<code>` preserve their path.
+
+The app includes account and billing views, project upload and polling, result
+feedback, horizontal/vertical Piano Roll, touch navigation and internal research
+views. The old `/api/upload-midi`, `/api/latest-midi` and `/api/list` endpoints
+belonged to the retired MIDI-only server; they are not the current project/account contract.
+
+## Checks
 
 ```bash
-# Account API (из основного Audio2MIDI repo)
-uvicorn web_api.app:app --host 127.0.0.1 --port 8400 --reload
-
-# Frontend (в другом терминале)
 cd frontend
-npm install
-npm run dev  # http://localhost:3000
+npm run test
+npm run lint
+npm run build
+npm run test:e2e
 ```
 
-Vite проксирует `/api/*` на account API (:8400), удаляя префикс `/api`.
-
-### Тестирование в браузере
-
-```
-# Dev mode (без Telegram)
-http://localhost:3000/?dev=1
-
-# С конкретным MIDI из бэкенда
-http://localhost:3000/?dev=1&midi=test_id
-
-# С прямой ссылкой на MIDI файл (S3, URL)
-http://localhost:3000/?file=https://s3.example.com/song.mid
-```
-
-## Конфигурация
-
-| Переменная | Описание | По умолчанию |
-|------------|----------|--------------|
-| `BOT_TOKEN` | Telegram bot token (для валидации initData) | обязательно |
-| `ADMIN_IDS` | ID админов через запятую | `371331803` |
-| `MIDI_DIR` | Директория для MIDI файлов | `/data/midi` |
-
-## Архитектура
-
-```
-┌─────────────────────┐      POST /api/upload-midi      ┌─────────────────────┐
-│    Audio2MIDI Bot    │ ───────────────────────────────▶│  Account API + App  │
-│   (наш VPS)          │        (MIDI файл)              │     (наш VPS)       │
-└─────────────────────┘                                 └─────────────────────┘
-         │                                                        │
-         │                                                        │
-         ▼                                                        ▼
-┌─────────────────────┐                                 ┌─────────────────────┐
-│  Юзер в Telegram    │ ──── Открывает Mini App ──────▶ │   Piano Roll UI     │
-└─────────────────────┘                                 └─────────────────────┘
-```
-
-### Как работает
-
-1. Юзер отправляет песню боту
-2. Бот конвертирует в MIDI
-3. Бот загружает MIDI через `POST /api/upload-midi` → получает `midi_id`
-4. Бот отправляет кнопку с URL: `https://app.audio2midi.ru/?midi={midi_id}`
-5. Юзер открывает Mini App → Piano Roll загружает MIDI автоматически
-
-### Альтернативный режим: прямая ссылка
-
-Визуализатор может загружать MIDI по прямому URL (например, из S3):
-
-```
-https://app.audio2midi.ru/?file=https://s3.rapid-vision.ru/a2m/song.mid
-```
-
-MIDI загружается и парсится прямо в браузере. Серверный бэкенд для этого не нужен.
-
-### Интеграция с ботом
-
-В боте указать `MINIAPP_URL`:
+Browser tests use fixtures and the Vite preview server. Install the Playwright
+Chromium browser once with `npx playwright install chromium` if it is absent.
+For a Docker/nginx integration check with an isolated fake account upstream:
 
 ```bash
-# Для разработки (tunnel)
-MINIAPP_URL=https://your-tunnel.pinggy.link
-
-# Продакшн
-MINIAPP_URL=https://app.audio2midi.ru
+# From the Mini App repository root:
+docker build -f Dockerfile.frontend -t audio2midi-miniapp:local-test .
+python3 scripts/test_local_proxy.py audio2midi-miniapp:local-test
 ```
 
-Код бота для загрузки MIDI:
-```python
-async with httpx.AsyncClient() as client:
-    response = await client.post(
-        f"{MINIAPP_URL}/api/upload-midi",
-        files={"file": (filename, midi_bytes, "audio/midi")},
-        data={"user_id": str(user_id)},
-    )
-    midi_id = response.json()["midi_id"]
-```
+The proxy check creates a temporary container, sends only synthetic requests and
+removes that container afterwards. It never calls production services.
+On Linux, pass `--bind <host bridge address>` so the container can reach the
+synthetic upstream (CI uses `--bind 0.0.0.0` on its disposable runner).
 
-## API
+## Deployment reference
 
-| Endpoint | Метод | Описание |
-|----------|-------|----------|
-| `/api/health` | GET | Health check |
-| `/api/upload-midi` | POST | Загрузить MIDI из бота (multipart/form-data) |
-| `/api/latest-midi?midi_id=X` | GET | Получить MIDI как base64 для фронтенда |
-| `/api/midi/{filename}` | GET | Скачать MIDI файл по имени |
-| `/api/midi-file/{midi_id}` | GET | Скачать MIDI по ID |
-| `/api/auth` | POST | Валидация Telegram initData |
-| `/api/list` | GET | Список MIDI файлов (только админ) |
-
-### Upload MIDI
-
-```bash
-curl -X POST https://app.audio2midi.ru/api/upload-midi \
-  -F "file=@song.mid" \
-  -F "user_id=123456789"
-```
-
-Ответ:
-```json
-{
-  "ok": true,
-  "midi_id": "song_a1b2c3d4",
-  "filename": "song_a1b2c3d4.mid",
-  "size": 12345
-}
-```
-
-## Функции Piano Roll
-
-- 🎹 Canvas-based визуализация нот
-- 🎵 Воспроизведение Grand Piano (Salamander samples)
-- 🔄 Два режима: горизонтальный (классический) и вертикальный (Guitar Hero)
-- 📱 Touch support: pinch-to-zoom, свайп для скролла
-- 🎨 Цвета нот по velocity (от синего к красному)
-- 🌙 Поддержка тем Telegram (dark/light)
-- 📂 Drag & drop для MIDI файлов
-- 🔗 Загрузка по URL (`?file=`) или из бэкенда (`?midi=`)
-
-## Стек
-
-- **Frontend:** React 19 + TypeScript + Vite
-- **Визуализация:** Canvas API
-- **Звук:** Tone.js + @tonejs/midi
-- **Backend:** FastAPI + Python 3.11 + uv
-- **Инфра:** Docker + nginx
-- **Telegram:** WebApp SDK
-
-## Структура проекта
-
-```
-audio2midi-miniapp/
-├── frontend/                  # React + TypeScript + Vite
-│   ├── src/
-│   │   ├── App.tsx            # Главный компонент (auth gate + layout)
-│   │   ├── main.tsx           # Entry point
-│   │   ├── components/
-│   │   │   └── PianoRoll.tsx  # Визуализатор (Canvas + Tone.js)
-│   │   ├── api/
-│   │   │   ├── client.ts     # Typed API client (fetch wrapper)
-│   │   │   ├── midi.ts       # MIDI API functions
-│   │   │   └── types.ts      # TypeScript типы ответов
-│   │   ├── hooks/
-│   │   │   └── useTelegram.ts # Telegram WebApp SDK integration
-│   │   └── styles/
-│   │       └── global.css     # Темы, кнопки, анимации
-│   ├── index.html             # HTML шаблон (Telegram SDK скрипт)
-│   ├── package.json
-│   ├── vite.config.ts         # Dev server + proxy /api → :3001
-│   ├── tsconfig.json
-│   └── eslint.config.js
-├── backend/                   # FastAPI
-│   ├── app.py                 # Endpoints (upload, latest-midi, auth, list)
-│   ├── auth.py                # HMAC-SHA256 валидация initData
-│   ├── config.py              # Конфигурация (env vars)
-│   ├── pyproject.toml         # Python зависимости (uv)
-│   └── uv.lock
-├── docker-compose.yaml        # Docker деплой (frontend + backend)
-├── Dockerfile.frontend        # Multi-stage: npm build → nginx
-├── Dockerfile.backend         # Python + uv
-├── nginx.conf                 # Proxy /api → backend
-├── .env.example               # Шаблон переменных окружения
-├── DEPLOY.md                  # Инструкции по деплою
-└── REVIEW.md                  # Code review заметки
-```
-
-## Деплой
-
-См. [DEPLOY.md](DEPLOY.md) — инструкции по деплою на сервер.
-
-### Кратко
-
-Для статичного деплоя (без бэкенда, только визуализатор по `?file=` URL):
-```bash
-cd frontend && npm install && npm run build
-# Скопировать dist/* на веб-сервер с HTTPS
-```
-
-Для полного деплоя (с бэкендом для upload/list):
-```bash
-docker compose up -d --build
-```
-
-## Текущий статус
-
-- **Наш визуализатор:** разворачивается на собственном VPS под
-  `app.audio2midi.ru`; `miniapp.audio2midi.ru` обслуживает тот же build.
-- **Legacy fallback:** `audio2midi.ru/visualizer` на старом сервере остаётся
-  доступным на время проверки и переключения пользователей.
-
-## License
-
-MIT
+[deploy/README.md](deploy/README.md) describes the separate production static
+release: Mini App at `/` and the signal editor at `/editor/`, validated together.
+Local Compose contains only the Mini App; editor handoff requires that composite
+release. [DEPLOY.md](DEPLOY.md) explains these boundaries. The production URL
+is `https://app.audio2midi.ru`; compatibility URL is `https://miniapp.audio2midi.ru`.
+The visual reference is the separate `redesign` branch of `Audio2MIDI/WebApp`.

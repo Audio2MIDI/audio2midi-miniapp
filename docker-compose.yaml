@@ -4,22 +4,9 @@ services:
       context: .
       dockerfile: Dockerfile.frontend
     ports:
-      - "80:80"
-    depends_on:
-      - backend
-    restart: unless-stopped
-
-  backend:
-    build:
-      context: .
-      dockerfile: Dockerfile.backend
+      - "127.0.0.1:${LOCAL_PORT:-8080}:80"
     environment:
-      - BOT_TOKEN=${BOT_TOKEN}
-      - ADMIN_IDS=${ADMIN_IDS:-371331803}
-      - MIDI_DIR=${MIDI_DIR:-/data/midi}
-    volumes:
-      - midi_data:/data/midi
+      ACCOUNT_API_UPSTREAM: ${ACCOUNT_API_UPSTREAM:-host.docker.internal:8400}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
-
-volumes:
-  midi_data:

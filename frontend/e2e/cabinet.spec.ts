@@ -615,7 +615,7 @@ test('foreign-card checkout is clearly one-time and accessible', async ({ page }
   await page.goto('/billing')
   await page.getByRole('radio', { name: /Иностранная карта/ }).check()
   await expect(page.getByRole('checkbox')).toHaveCount(0)
-  await expect(page.getByText(/Visa, Mastercard и UnionPay/)).toBeVisible()
+  await expect(page.getByText(/Карты зарубежных банков из поддерживаемых Robokassa стран/)).toBeVisible()
   await expect(page.getByText(/Автоматических списаний нет/)).toBeVisible()
   await expect(page.getByText(/защищённой странице Robokassa/)).toBeVisible()
   await expect(page.getByRole('button', { name: /Перейти к оплате/ })).toBeEnabled()

@@ -1,120 +1,37 @@
-# Деплой MiniApp Piano Roll
+# Mini App build and deployment boundaries
 
-## Что это
-Кастомный Piano Roll визуализатор для MIDI файлов. Работает целиком в браузере — серверная часть опциональна. Используется как Telegram MiniApp (открывается внутри Telegram по кнопке).
+## Local development
 
-## Репозиторий
-```
-https://github.com/Audio2MIDI/audio2midi-miniapp.git
-```
+Use [README.md](README.md) for Vite and Docker development. The default Compose
+service is a local frontend on `127.0.0.1:8080`, proxying to the account API from
+`Audio2MIDI/Audio2MIDI` on port 8400. The MIDI-only backend and
+its Dockerfile are removed; [LEGACY_CLEANUP.md](LEGACY_CLEANUP.md) records their
+preserved Git commit and the active API boundary.
+There is no production deployment command in the local Compose workflow.
 
-## Требования
-- Node.js 18+ (для сборки)
-- Любой веб-сервер с HTTPS (nginx, caddy, apache, etc.)
+## Static build
 
-## Деплой (статичный фронтенд)
-
-Для базового визуализатора бэкенд не нужен — MIDI загружается по прямому URL через параметр `?file=`.
+Use Node.js 22:
 
 ```bash
-git clone https://github.com/Audio2MIDI/audio2midi-miniapp.git
-cd audio2midi-miniapp/frontend
-
-npm install
+cd frontend
+npm ci
+npm run test
+npm run lint
 npm run build
-
-# Результат в dist/ (~480 КБ)
-cp -r dist/* /путь/к/сайту/app/
 ```
 
-### Настройка nginx
+`frontend/dist` is the Mini App alone. `/visualizer` and `?file=` can work with a
+CORS-enabled MIDI source, but the account, upload and project routes need the
+account API behind `/api/`. Serving static files does not supply those APIs.
 
-```nginx
-location /app/ {
-    alias /путь/к/статике/app/;
-    try_files $uri $uri/ /app/index.html;
-}
-```
+## Production reference
 
-```bash
-sudo nginx -s reload
-```
-
-## Деплой (полный, с бэкендом)
-
-Полный деплой включает FastAPI бэкенд для загрузки MIDI через API (используется ботом).
-
-```bash
-git clone https://github.com/Audio2MIDI/audio2midi-miniapp.git
-cd audio2midi-miniapp
-
-cp .env.example .env
-# Отредактировать .env — указать BOT_TOKEN
-
-docker compose up -d --build
-```
-
-Приложение будет доступно на порту 80. Для HTTPS — поставить reverse proxy (Traefik, Caddy, nginx + certbot).
-
-## Использование
-
-### Режим 1: Прямая ссылка на MIDI (без бэкенда)
-
-Визуализатор принимает URL MIDI-файла через query-параметр `file`:
-
-```
-https://your-domain.com/app/?file=https://s3.rapid-vision.ru/a2m/example.mid
-```
-
-MIDI загружается и парсится прямо в браузере через JavaScript.
-
-### Режим 2: Через бэкенд API (с ботом)
-
-Бот загружает MIDI через `POST /api/upload-midi`, получает `midi_id`, и формирует ссылку:
-
-```
-https://your-domain.com/?midi=song_a1b2c3d4
-```
-
-## Интеграция с ботом Audio2MIDI
-
-Бот формирует кнопку "🎹 Piano Roll" с URL визуализатора. Настройка URL — в файле:
-- `/home/jatana/Audio2MIDI/utils.py` — функции `upload_and_log()` и `send_files()`
-- Переменная: `visualizer_url = f"https://audio2midi.ru/visualizer?file=..."`
-- При смене домена/пути — поменять URL здесь
-
-## Текущий статус
-- **Наш визуализатор:** разворачивается на собственном VPS под
-  `app.audio2midi.ru`; `miniapp.audio2midi.ru` обслуживает тот же build.
-- **Legacy fallback:** `audio2midi.ru/visualizer` на старом сервере остаётся
-  доступным на время проверки и переключения пользователей.
-
-Актуальная production-схема, nginx-конфигурация и rollback описаны в
-[`deploy/README.md`](deploy/README.md).
-
-## Структура проекта
-
-```
-audio2midi-miniapp/
-├── frontend/                # React + TypeScript + Vite
-│   ├── src/
-│   │   ├── components/
-│   │   │   └── PianoRoll.tsx    # Основной визуализатор (вертикальный + горизонтальный)
-│   │   ├── api/                 # Typed API client
-│   │   ├── hooks/
-│   │   │   └── useTelegram.ts   # Telegram WebApp SDK
-│   │   └── App.tsx
-│   └── package.json
-├── backend/                 # FastAPI (опционально, для upload/list API)
-│   ├── app.py
-│   ├── auth.py
-│   ├── config.py
-│   └── pyproject.toml
-├── docker-compose.yaml      # Docker деплой (фронт + бэкенд + nginx)
-├── Dockerfile.frontend      # Multi-stage: npm build → nginx
-├── Dockerfile.backend       # Python + uv
-├── nginx.conf               # Proxy /api → backend
-├── .env.example
-├── DEPLOY.md                # ← Этот файл
-└── README.md
-```
+The production web release combines the Mini App and the signal editor. Follow
+[deploy/README.md](deploy/README.md) and the nginx files in `deploy/nginx/`.
+Use `scripts/build_composite_release.sh` and
+`scripts/validate_composite_release.sh` to build and validate both components.
+An ordinary Mini App build must not replace a composite release and remove
+`/editor/`. Confirm the actual active release and API runtime before a separately
+approved deployment. Local development and local image builds do not activate
+or restart production.

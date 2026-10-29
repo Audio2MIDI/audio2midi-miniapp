@@ -1876,7 +1876,8 @@
   accent-color: var(--product-blue);
 }
 
-.billing-consent a {
+.billing-consent a,
+.billing-security a {
   color: var(--product-blue-soft);
 }
 

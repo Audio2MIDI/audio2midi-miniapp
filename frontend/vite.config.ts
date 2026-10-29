@@ -9,7 +9,7 @@ export default defineConfig({
     allowedHosts: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:8400',
+        target: `http://${process.env.ACCOUNT_API_UPSTREAM || '127.0.0.1:8400'}`,
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },

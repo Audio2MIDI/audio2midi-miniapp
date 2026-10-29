@@ -10,6 +10,8 @@ frontend/test-results/
 
 # Environment
 .env
+.env.*
+!.env.example
 *.local
 
 # Python
@@ -25,6 +27,9 @@ venv/
 *.swp
 *.swo
 .DS_Store
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
 
 # Logs
 *.log
