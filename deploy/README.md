@@ -130,3 +130,10 @@ config and runs nginx -t before reload. S3 and backend settings remain unchanged
 Local routing tests verify result/editor return parameters. Live Telegram webview
 redirect behavior and canonical reauthentication remain deployment acceptance
 gates; URL-contract tests alone do not establish a successful Telegram login.
+
+Browser verification: `node frontend/scripts/test-compatibility-redirect.mjs`
+runs five local Chromium 307 cases across two origins, asserting exact Telegram
+fragment inheritance, login `next` for result/editor, Telegram start query and
+encoded signed-file URL preservation. It also verifies fragment data never reaches
+the HTTP server. This uses a local HTTP fixture, not nginx/TLS or a real Telegram
+webview, and does not perform login. Run the routing unit suite alongside it.
