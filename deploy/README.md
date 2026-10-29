@@ -108,3 +108,32 @@ Atomically repoint `/opt/audio2midi-web/current` to the previous release,
 validate nginx, and reload it. The bot's `VISUALIZER_BASE_URL` can independently
 be restored to `https://audio2midi.ru/visualizer` if the new frontend must be
 removed from the user path.
+
+## Compatibility origin and private MIDI
+
+The HTTPS compatibility host redirects to canonical with 307 and the exact
+`$request_uri`. Path, encoded query, `next`, `file`, and Telegram start parameters
+are retained. A Location without a fragment lets browsers inherit the original
+fragment, including Telegram launch data. Redirect happens before app bootstrap;
+MIDI is therefore fetched from the existing S3-allowed canonical origin.
+
+Host-only compatibility cookies do not transfer to canonical. Users without a
+canonical session sign in again; the existing safe return route retains the
+requested result/editor. This does not copy tokens or sessions between hosts.
+
+Apply only the host-guard hunk to the verified live HTTPS server: the live config
+contains additional editor locations absent from older repository templates.
+Do not replace the entire live config with this file. Before deployment save the
+actual config, run nginx -t, then reload only nginx. Rollback restores that saved
+config and runs nginx -t before reload. S3 and backend settings remain unchanged.
+
+Local routing tests verify result/editor return parameters. Live Telegram webview
+redirect behavior and canonical reauthentication remain deployment acceptance
+gates; URL-contract tests alone do not establish a successful Telegram login.
+
+Browser verification: `node frontend/scripts/test-compatibility-redirect.mjs`
+runs five local Chromium 307 cases across two origins, asserting exact Telegram
+fragment inheritance, login `next` for result/editor, Telegram start query and
+encoded signed-file URL preservation. It also verifies fragment data never reaches
+the HTTP server. This uses a local HTTP fixture, not nginx/TLS or a real Telegram
+webview, and does not perform login. Run the routing unit suite alongside it.

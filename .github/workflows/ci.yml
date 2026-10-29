@@ -27,6 +27,9 @@ jobs:
       - run: npm run lint
       - run: npm run build
       - run: npx playwright install --with-deps chromium
+      - name: Verify compatibility redirect in Chromium
+        run: node scripts/test-compatibility-redirect.mjs
+        timeout-minutes: 2
       - run: npm run test:e2e
 
   local-proxy:
