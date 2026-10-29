@@ -4,8 +4,9 @@
 
 Use [README.md](README.md) for Vite and Docker development. The default Compose
 service is a local frontend on `127.0.0.1:8080`, proxying to the account API from
-`Audio2MIDI/Audio2MIDI` on port 8400. The MIDI-only `backend/` and
-`Dockerfile.backend` remain legacy sources, not the current account backend.
+`Audio2MIDI/Audio2MIDI` on port 8400. The MIDI-only backend and
+its Dockerfile are removed; [LEGACY_CLEANUP.md](LEGACY_CLEANUP.md) records their
+preserved Git commit and the active API boundary.
 There is no production deployment command in the local Compose workflow.
 
 ## Static build

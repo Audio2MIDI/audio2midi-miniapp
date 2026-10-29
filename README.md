@@ -3,8 +3,9 @@
 React, TypeScript and Vite client for the Audio2MIDI account, project library,
 uploads, processing results and Canvas Piano Roll with Tone.js playback.
 The account API is `web_api/app.py` in the separate `Audio2MIDI/Audio2MIDI`
-repository. The `backend/` directory here is the legacy MIDI-only API; it is not
-the backend for the current account UI and is not started by Compose.
+repository. The old MIDI-only server and unused client helpers were retired;
+[LEGACY_CLEANUP.md](LEGACY_CLEANUP.md) records recovery commits and the compatibility
+reader retained for existing MIDI links. `frontend/dist` is generated, not tracked.
 
 ## Local development
 
@@ -93,7 +94,7 @@ plus request overhead. Public campaign links `/r/<code>` preserve their path.
 The app includes account and billing views, project upload and polling, result
 feedback, horizontal/vertical Piano Roll, touch navigation and internal research
 views. The old `/api/upload-midi`, `/api/latest-midi` and `/api/list` endpoints
-belong to `backend/`; they are not the current project/account contract.
+belonged to the retired MIDI-only server; they are not the current project/account contract.
 
 ## Checks
 
